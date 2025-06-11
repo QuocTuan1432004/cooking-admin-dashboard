@@ -1,0 +1,180 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary-color: #ff7452;
+  --secondary-color: #4ecdc4;
+  --success-color: #4caf50;
+  --danger-color: #f44336;
+  --warning-color: #ff9800;
+  --info-color: #2196f3;
+  --dark-color: #333;
+  --light-color: #f5f5f5;
+  --border-color: #ddd;
+  --text-color: #333;
+  --light-text: #666;
+  --border-radius: 8px;
+  --box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --transition: all 0.3s ease;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: "Inter", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f0f2f5;
+  color: var(--text-color);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Animation classes */
+.fade-in {
+  animation: fadeIn 0.3s ease forwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Animation cho trang login */
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  33% {
+    transform: translateY(-20px) rotate(120deg);
+  }
+  66% {
+    transform: translateY(10px) rotate(240deg);
+  }
+}
+
+@keyframes slideInFromTop {
+  0% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-float-delayed {
+  animation: float 6s ease-in-out infinite;
+  animation-delay: -2s;
+}
+
+.animate-float-delayed-2 {
+  animation: float 6s ease-in-out infinite;
+  animation-delay: -4s;
+}
+
+.animate-slideInFromTop {
+  animation: slideInFromTop 0.8s ease-out;
+}
+
+.delay-1000 {
+  animation-delay: -2s;
+}
+
+.delay-2000 {
+  animation-delay: -4s;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1024px) {
+  .main-content {
+    margin-left: 70px;
+  }
+}
+
+@media (max-width: 768px) {
+  .main-content {
+    margin-left: 0;
+    padding: 16px;
+  }
+
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+  }
+}
+
+/* Custom button hover effects */
+.btn-hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Status indicators */
+.status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 8px;
+}
+
+.status-indicator.online {
+  background-color: var(--success-color);
+}
+
+.status-indicator.offline {
+  background-color: var(--light-text);
+}
+
+.status-indicator.away {
+  background-color: var(--warning-color);
+}
+
+/* Hover effects cho login container */
+.login-container-hover:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 25px 80px rgba(255, 93, 0, 0.15);
+  transition: all 0.3s ease;
+}
+
+/* Interactive input effects */
+.form-input-focus:focus {
+  transform: scale(1.02);
+  transition: transform 0.2s ease;
+}
