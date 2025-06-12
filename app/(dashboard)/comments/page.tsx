@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Header } from "@/components/header";
+import { Header } from "@/components/ui/header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,6 +44,7 @@ import {
   Filter,
   Search,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 interface Comment {
   id: number;
@@ -56,6 +57,9 @@ interface Comment {
 }
 
 export default function CommentsPage() {
+  const router = useRouter();
+  const [unreadNotifications] = useState(3);
+
   const [comments, setComments] = useState<Comment[]>([
     {
       id: 1,
@@ -109,7 +113,8 @@ export default function CommentsPage() {
 
   const handleLogout = () => {
     console.log("Đăng xuất thành công");
-    alert("Đã đăng xuất thành công!");
+    localStorage.removeItem("auth_token");
+    router.push("/login");
   };
 
   const getStatusBadge = (status: string) => {
@@ -251,8 +256,9 @@ export default function CommentsPage() {
       <Header
         title="Quản lý Bình luận"
         showSearch={false}
-        userName="Admin User"
+        userName="Nguyễn Huỳnh Quốc Tuấn"
         onLogout={handleLogout}
+        notificationCount={unreadNotifications}
       />
 
       {/* Statistics Cards */}
@@ -527,6 +533,7 @@ export default function CommentsPage() {
                                   onChange={(e) =>
                                     setEditContent(e.target.value)
                                   }
+                                  placeholder="Nhập nội dung bình luận..."
                                   rows={4}
                                 />
                               </div>
