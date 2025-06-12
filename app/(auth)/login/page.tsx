@@ -41,7 +41,10 @@ export default function LoginPage() {
       {/* Background Image */}
       <div
         className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: "url('/images/login-background.png')" }}
+        style={{
+          backgroundImage:
+            "url('/pngtree-beige-pastel-aesthetic-vector-background-picture-image_3950681.png')",
+        }}
       >
         <div className="absolute inset-0 bg-[#fff8f0]/85 backdrop-blur-[2px]"></div>
       </div>
@@ -58,7 +61,7 @@ export default function LoginPage() {
         <CardHeader className="text-center space-y-2 pb-6">
           <div className="mx-auto w-20 h-20 relative mb-4 animate-pulse">
             <Image
-              src="/images/chef-logo.png"
+              src="/LogoNoName.png"
               alt="LetMeCook Logo"
               fill
               className="object-contain rounded-2xl shadow-lg"

@@ -31,7 +31,7 @@ interface Category {
   parentId?: number;
   children?: Category[];
   recipeCount: number;
-  image?: string; // Thêm trường image cho danh mục con
+  image?: string;
 }
 
 export default function CategoriesPage() {
@@ -187,11 +187,10 @@ export default function CategoriesPage() {
         ? Number.parseInt(newCategory.parentId)
         : undefined,
       recipeCount: 0,
-      image: newCategory.parentId ? newCategory.image : undefined, // Chỉ thêm image cho danh mục con
+      image: newCategory.parentId ? newCategory.image : undefined,
     };
 
     if (newCategory.parentId) {
-      // Add as subcategory
       setCategories((prev) =>
         prev.map((cat) => {
           if (cat.id === Number.parseInt(newCategory.parentId)) {
@@ -204,7 +203,6 @@ export default function CategoriesPage() {
         })
       );
     } else {
-      // Add as main category
       setCategories((prev) => [...prev, { ...category, children: [] }]);
     }
 
@@ -220,7 +218,6 @@ export default function CategoriesPage() {
 
   const handleDeleteCategory = (categoryId: number, parentId?: number) => {
     if (parentId) {
-      // Delete subcategory
       setCategories((prev) =>
         prev.map((cat) => {
           if (cat.id === parentId) {
@@ -234,7 +231,6 @@ export default function CategoriesPage() {
         })
       );
     } else {
-      // Delete main category
       setCategories((prev) => prev.filter((cat) => cat.id !== categoryId));
     }
   };
@@ -243,9 +239,24 @@ export default function CategoriesPage() {
     return categories.filter((cat) => !cat.parentId);
   };
 
+  const handleLogout = () => {
+    // Implement logout logic here
+    console.log("Đăng xuất thành công");
+    // You can add your logout logic here, such as:
+    // - Clear user session
+    // - Redirect to login page
+    // - Call logout API
+    alert("Đã đăng xuất thành công!");
+  };
+
   return (
     <div>
-      <Header title="Quản lý Danh mục" showSearch={false} />
+      <Header
+        title="Quản lý Danh mục"
+        showSearch={false}
+        userName="Nguyễn Văn A"
+        onLogout={handleLogout}
+      />
 
       {/* Create Category Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">

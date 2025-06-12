@@ -11,16 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import {
-  Search,
-  LogOut,
-  User,
-  Settings,
-  ChevronDown,
-  Bell,
-} from "lucide-react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { Search, LogOut, User, Settings } from "lucide-react";
 
 interface HeaderProps {
   title: string;
@@ -28,19 +19,16 @@ interface HeaderProps {
   userName?: string;
   userAvatar?: string;
   onLogout?: () => void;
-  notificationCount?: number;
 }
 
 export function Header({
   title,
   showSearch = true,
-  userName = "Admin User",
+  userName = "",
   userAvatar,
   onLogout,
-  notificationCount = 0,
 }: HeaderProps) {
   const [searchQuery, setSearchQuery] = useState("");
-  const router = useRouter();
 
   const handleLogout = () => {
     if (onLogout) {
@@ -49,10 +37,7 @@ export function Header({
       // Default logout logic
       console.log("Đăng xuất");
       // Redirect to login page or clear session
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("auth_token");
-        router.push("/login");
-      }
+      window.location.href = "/login";
     }
   };
 
@@ -86,18 +71,6 @@ export function Header({
             </div>
           )}
 
-          {/* Notifications */}
-          <Link href="/notifications">
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="h-5 w-5" />
-              {notificationCount > 0 && (
-                <span className="absolute top-0 right-0 h-4 w-4 bg-red-500 rounded-full text-[10px] flex items-center justify-center text-white">
-                  {notificationCount > 9 ? "9+" : notificationCount}
-                </span>
-              )}
-            </Button>
-          </Link>
-
           {/* User Menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -114,19 +87,11 @@ export function Header({
                     {getUserInitials(userName)}
                   </AvatarFallback>
                 </Avatar>
-                <div className="flex items-center">
-                  <span className="font-medium text-gray-700 mr-1">
-                    {userName}
-                  </span>
-                  <ChevronDown className="h-4 w-4 text-gray-500" />
-                </div>
+                <span className="font-medium text-gray-700">{userName}</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuItem className="flex items-center space-x-2">
-                <User className="w-4 h-4" />
-                <span>Thông tin cá nhân</span>
-              </DropdownMenuItem>
+              <DropdownMenuItem className="flex items-center space-x-2"></DropdownMenuItem>
               <DropdownMenuItem className="flex items-center space-x-2">
                 <Settings className="w-4 h-4" />
                 <span>Cài đặt</span>
