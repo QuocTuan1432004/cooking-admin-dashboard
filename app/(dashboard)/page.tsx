@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Header } from "@/components/ui/header";
+import { Header } from "@/components/header";
 import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,7 +43,6 @@ import {
   FolderOpen,
 } from "lucide-react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 
 interface Recipe {
   id: number;
@@ -57,7 +56,6 @@ interface Recipe {
 }
 
 export default function Dashboard() {
-  const router = useRouter();
   const [pendingRecipes, setPendingRecipes] = useState<Recipe[]>([
     {
       id: 1,
@@ -133,12 +131,6 @@ export default function Dashboard() {
     },
   ];
 
-  const handleLogout = () => {
-    console.log("Đăng xuất thành công");
-    localStorage.removeItem("auth_token");
-    router.push("/login");
-  };
-
   const handleApproveRecipe = (recipeId: number) => {
     setPendingRecipes((prev) =>
       prev.map((recipe) =>
@@ -209,7 +201,6 @@ export default function Dashboard() {
       <Header
         title="Tổng quan"
         userName="Nguyễn Huỳnh Quốc Tuấn"
-        onLogout={handleLogout}
         notificationCount={unreadNotifications}
       />
 

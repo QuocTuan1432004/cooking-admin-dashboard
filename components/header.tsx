@@ -3,31 +3,18 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Search,
-  LogOut,
-  User,
-  Settings,
-  ChevronDown,
   Bell,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 
 interface HeaderProps {
   title: string;
   showSearch?: boolean;
   userName?: string;
   userAvatar?: string;
-  onLogout?: () => void;
   notificationCount?: number;
 }
 
@@ -36,25 +23,9 @@ export function Header({
   showSearch = true,
   userName = "Admin User",
   userAvatar,
-  onLogout,
   notificationCount = 0,
 }: HeaderProps) {
   const [searchQuery, setSearchQuery] = useState("");
-  const router = useRouter();
-
-  const handleLogout = () => {
-    if (onLogout) {
-      onLogout();
-    } else {
-      // Default logout logic
-      console.log("Đăng xuất");
-      // Redirect to login page or clear session
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("auth_token");
-        router.push("/login");
-      }
-    }
-  };
 
   const getUserInitials = (name: string) => {
     return name
@@ -98,49 +69,21 @@ export function Header({
             </Button>
           </Link>
 
-          {/* User Menu */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                className="flex items-center space-x-2 hover:bg-gray-100"
-              >
-                <Avatar className="w-8 h-8">
-                  <AvatarImage
-                    src={userAvatar || "/placeholder.svg"}
-                    alt={userName}
-                  />
-                  <AvatarFallback className="bg-orange-500 text-white text-sm">
-                    {getUserInitials(userName)}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex items-center">
-                  <span className="font-medium text-gray-700 mr-1">
-                    {userName}
-                  </span>
-                  <ChevronDown className="h-4 w-4 text-gray-500" />
-                </div>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuItem className="flex items-center space-x-2">
-                <User className="w-4 h-4" />
-                <span>Thông tin cá nhân</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem className="flex items-center space-x-2">
-                <Settings className="w-4 h-4" />
-                <span>Cài đặt</span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="flex items-center space-x-2 text-red-600 focus:text-red-600"
-                onClick={handleLogout}
-              >
-                <LogOut className="w-4 h-4" />
-                <span>Đăng xuất</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* User Avatar - Static Display */}
+          <div className="flex items-center space-x-2">
+            <Avatar className="w-8 h-8">
+              <AvatarImage
+                src={userAvatar || "/placeholder.svg"}
+                alt={userName}
+              />
+              <AvatarFallback className="bg-orange-500 text-white text-sm">
+                {getUserInitials(userName)}
+              </AvatarFallback>
+            </Avatar>
+            <span className="font-medium text-gray-700">
+              {userName}
+            </span>
+          </div>
         </div>
       </div>
     </header>

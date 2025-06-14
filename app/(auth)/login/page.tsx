@@ -1,39 +1,34 @@
 "use client";
 
 import type React from "react";
-
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, AlertCircle } from "lucide-react";
+import { useAuth } from "@/hooks/userAuth";
 
 export default function LoginPage() {
-  const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
-    username: "",
+    username: "", // Giữ tên field như cũ
     password: "",
   });
-  const router = useRouter();
+
+  // Sử dụng hook thay vì logic cũ
+  const { login, isLoading, error, setError } = useAuth();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-
-    // Giả lập đăng nhập
-    setTimeout(() => {
-      setIsLoading(false);
-      // Set cookie để middleware biết user đã đăng nhập
-      document.cookie = "auth_token=admin_logged_in; path=/; max-age=86400";
-      router.push("/");
-    }, 1500);
+    // Gọi login từ hook, truyền username as email
+    await login(formData.username, formData.password);
   };
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+    // Clear error khi user bắt đầu nhập lại
+    if (error) setError("");
   };
 
   return (
@@ -41,10 +36,7 @@ export default function LoginPage() {
       {/* Background Image */}
       <div
         className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat"
-        style={{
-          backgroundImage:
-            "url('/pngtree-beige-pastel-aesthetic-vector-background-picture-image_3950681.png')",
-        }}
+        style={{ backgroundImage: "url('/images/login-background.png')" }}
       >
         <div className="absolute inset-0 bg-[#fff8f0]/85 backdrop-blur-[2px]"></div>
       </div>
@@ -74,6 +66,14 @@ export default function LoginPage() {
         </CardHeader>
 
         <CardContent>
+          {/* Error Message từ hook */}
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <span className="text-sm">{error}</span>
+            </div>
+          )}
+
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
               <Input
@@ -82,7 +82,8 @@ export default function LoginPage() {
                 value={formData.username}
                 onChange={(e) => handleInputChange("username", e.target.value)}
                 required
-                className="rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 focus:border-orange-400 focus:bg-white focus:shadow-orange-100 focus:translate-y-[-2px] transition-all"
+                disabled={isLoading} // Sử dụng isLoading từ hook
+                className="rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 focus:border-orange-400 focus:bg-white focus:shadow-orange-100 focus:translate-y-[-2px] transition-all disabled:opacity-50"
               />
             </div>
 
@@ -93,12 +94,14 @@ export default function LoginPage() {
                 value={formData.password}
                 onChange={(e) => handleInputChange("password", e.target.value)}
                 required
-                className="rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 pr-12 focus:border-orange-400 focus:bg-white focus:shadow-orange-100 focus:translate-y-[-2px] transition-all"
+                disabled={isLoading} // Sử dụng isLoading từ hook
+                className="rounded-xl border-2 border-gray-200 bg-gray-50 px-4 py-3 pr-12 focus:border-orange-400 focus:bg-white focus:shadow-orange-100 focus:translate-y-[-2px] transition-all disabled:opacity-50"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                disabled={isLoading}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 disabled:opacity-50"
               >
                 {showPassword ? (
                   <EyeOff className="w-5 h-5" />
@@ -113,7 +116,14 @@ export default function LoginPage() {
               disabled={isLoading || !formData.username || !formData.password}
               className="w-full bg-gradient-to-r from-orange-400 to-orange-600 hover:from-orange-500 hover:to-orange-700 text-white rounded-xl py-3 font-medium text-lg relative overflow-hidden hover:translate-y-[-2px] hover:shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? "Đang đăng nhập..." : "Đăng nhập"}
+              {isLoading ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  Đang đăng nhập...
+                </div>
+              ) : (
+                "Đăng nhập"
+              )}
               <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full hover:translate-x-full transition-transform duration-500"></span>
             </Button>
 
@@ -123,9 +133,7 @@ export default function LoginPage() {
                 className="text-orange-600 hover:text-orange-500 font-medium hover:underline transition-colors"
                 onClick={(e) => {
                   e.preventDefault();
-                  alert(
-                    "Tính năng quên mật khẩu sẽ được triển khai trong phiên bản tiếp theo."
-                  );
+                  alert("Tính năng quên mật khẩu sẽ được triển khai trong phiên bản tiếp theo.");
                 }}
               >
                 Quên mật khẩu?
