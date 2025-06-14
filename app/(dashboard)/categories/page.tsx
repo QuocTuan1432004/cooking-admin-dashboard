@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Header } from "@/components/ui/header";
+import { Header } from "@/components/header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,7 +23,6 @@ import {
   X,
 } from "lucide-react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 
 interface Category {
   id: number;
@@ -36,9 +35,6 @@ interface Category {
 }
 
 export default function CategoriesPage() {
-  const router = useRouter();
-  const [unreadNotifications] = useState(3);
-
   const [categories, setCategories] = useState<Category[]>([
     {
       id: 1,
@@ -244,9 +240,13 @@ export default function CategoriesPage() {
   };
 
   const handleLogout = () => {
+    // Implement logout logic here
     console.log("Đăng xuất thành công");
-    localStorage.removeItem("auth_token");
-    router.push("/login");
+    // You can add your logout logic here, such as:
+    // - Clear user session
+    // - Redirect to login page
+    // - Call logout API
+    alert("Đã đăng xuất thành công!");
   };
 
   return (
@@ -256,7 +256,6 @@ export default function CategoriesPage() {
         showSearch={false}
         userName="Nguyễn Huỳnh Quốc Tuấn"
         onLogout={handleLogout}
-        notificationCount={unreadNotifications}
       />
 
       {/* Create Category Section */}

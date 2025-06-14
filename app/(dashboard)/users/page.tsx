@@ -17,7 +17,7 @@ interface User {
   id: string;
   email: string;
   username?: string;
-  status: 'ACTIVE' | 'INACTIVE' | 'BANNED';
+  status: "ACTIVE" | "INACTIVE" | "BANNED";
   createdAt: string;
   banEndDate?: string;
   roles: Array<{ name: string; description: string; permissions: any[] }>;
@@ -25,7 +25,8 @@ interface User {
 }
 
 export default function UsersPage() {
-  const { getAllAccounts, deleteAccount, manageAccount, getRecipeCountByUser } = useAccountsApi();
+  const { getAllAccounts, deleteAccount, manageAccount, getRecipeCountByUser } =
+    useAccountsApi();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(0);
@@ -41,7 +42,7 @@ export default function UsersPage() {
     try {
       setLoading(true);
       const response = await getAllAccounts(currentPage, 5);
-      
+
       // Fetch recipe count for each user
       const usersWithRecipeCount = await Promise.all(
         response.content.map(async (user) => {
@@ -49,7 +50,7 @@ export default function UsersPage() {
           return { ...user, recipeCount };
         })
       );
-      
+
       setUsers(usersWithRecipeCount);
       setTotalPages(response.totalPages);
     } catch (error) {
@@ -70,7 +71,11 @@ export default function UsersPage() {
     }
   };
 
-  const handleManageUser = async (userId: string, action: 'ban' | 'ban-permanent' | 'activate', days?: number) => {
+  const handleManageUser = async (
+    userId: string,
+    action: "ban" | "ban-permanent" | "activate",
+    days?: number
+  ) => {
     try {
       await manageAccount(userId, action, days);
       fetchUsers(); // Refresh data
@@ -105,11 +110,13 @@ export default function UsersPage() {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('vi-VN');
+    return new Date(dateString).toLocaleDateString("vi-VN");
   };
 
   if (loading) {
-    return <div className="flex justify-center items-center h-64">Đang tải...</div>;
+    return (
+      <div className="flex justify-center items-center h-64">Đang tải...</div>
+    );
   }
 
   return (
@@ -129,8 +136,8 @@ export default function UsersPage() {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Tìm kiếm
             </label>
-            <Input 
-              placeholder="Tìm kiếm người đăng..." 
+            <Input
+              placeholder="Tìm kiếm người đăng..."
               value={searchKeyword}
               onChange={(e) => setSearchKeyword(e.target.value)}
             />
@@ -192,7 +199,9 @@ export default function UsersPage() {
             </Select>
           </div>
           <div className="flex items-end">
-            <Button className="w-full" onClick={fetchUsers}>Lọc</Button>
+            <Button className="w-full" onClick={fetchUsers}>
+              Lọc
+            </Button>
           </div>
         </div>
 
@@ -230,10 +239,16 @@ export default function UsersPage() {
                   key={user.id}
                   className="border-b border-gray-100 hover:bg-gray-50"
                 >
-                  <td className="py-3 px-4 text-gray-600">{user.id.slice(0, 8)}...</td>
+                  <td className="py-3 px-4 text-gray-600">
+                    {user.id.slice(0, 8)}...
+                  </td>
                   <td className="py-3 px-4 text-gray-600">{user.email}</td>
-                  <td className="py-3 px-4 font-medium">{user.username || 'N/A'}</td>
-                  <td className="py-3 px-4 text-gray-600">{formatDate(user.createdAt)}</td>
+                  <td className="py-3 px-4 font-medium">
+                    {user.username || "N/A"}
+                  </td>
+                  <td className="py-3 px-4 text-gray-600">
+                    {formatDate(user.createdAt)}
+                  </td>
                   <td className="py-3 px-4">
                     <span className="px-2 py-1 bg-blue-100 text-blue-800 text-sm rounded font-medium">
                       {user.recipeCount || 0}
@@ -242,21 +257,21 @@ export default function UsersPage() {
                   <td className="py-3 px-4">{getStatusBadge(user.status)}</td>
                   <td className="py-3 px-4">
                     <div className="flex space-x-2">
-                      {user.status === 'ACTIVE' ? (
-                        <Button 
-                          size="sm" 
+                      {user.status === "ACTIVE" ? (
+                        <Button
+                          size="sm"
                           variant="outline"
                           className="text-red-600 border-red-600 hover:bg-red-50"
-                          onClick={() => handleManageUser(user.id, 'ban', 7)}
+                          onClick={() => handleManageUser(user.id, "ban", 7)}
                         >
                           Khóa
                         </Button>
                       ) : (
-                        <Button 
-                          size="sm" 
+                        <Button
+                          size="sm"
                           variant="outline"
                           className="text-green-600 border-green-600 hover:bg-green-50"
-                          onClick={() => handleManageUser(user.id, 'activate')}
+                          onClick={() => handleManageUser(user.id, "activate")}
                         >
                           Kích hoạt
                         </Button>
@@ -280,18 +295,18 @@ export default function UsersPage() {
         {/* Pagination */}
         <div className="flex justify-center mt-6">
           <div className="flex space-x-2">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               size="sm"
-              onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))}
+              onClick={() => setCurrentPage((prev) => Math.max(0, prev - 1))}
               disabled={currentPage === 0}
             >
               «
             </Button>
             {Array.from({ length: totalPages }, (_, i) => (
-              <Button 
+              <Button
                 key={i}
-                size="sm" 
+                size="sm"
                 className={currentPage === i ? "bg-orange-500 text-white" : ""}
                 variant={currentPage === i ? "default" : "outline"}
                 onClick={() => setCurrentPage(i)}
@@ -299,10 +314,12 @@ export default function UsersPage() {
                 {i + 1}
               </Button>
             ))}
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               size="sm"
-              onClick={() => setCurrentPage(prev => Math.min(totalPages - 1, prev + 1))}
+              onClick={() =>
+                setCurrentPage((prev) => Math.min(totalPages - 1, prev + 1))
+              }
               disabled={currentPage === totalPages - 1}
             >
               »
