@@ -298,11 +298,13 @@ export default function UsersPage() {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('vi-VN');
+    return new Date(dateString).toLocaleDateString("vi-VN");
   };
 
   if (loading) {
-    return <div className="flex justify-center items-center h-64">Đang tải...</div>;
+    return (
+      <div className="flex justify-center items-center h-64">Đang tải...</div>
+    );
   }
 
   return (
