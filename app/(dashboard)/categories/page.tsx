@@ -18,6 +18,7 @@ import {
   createSubCategory,
   updateSubCategory,
   deleteSubCategory,
+  deleteMainCategory,
 } from "@/hooks/categoryApi/categoryApi"
 import type { Category } from "@/hooks/categoryApi/types"
 
@@ -44,6 +45,13 @@ export default function CategoriesPage() {
     image: "" as string | File,
   })
   const [editSubCategoryImage, setEditSubCategoryImage] = useState<string>("")
+
+  const [deleteConfirmDialog, setDeleteConfirmDialog] = useState({
+    isOpen: false,
+    categoryId: "",
+    categoryName: "",
+    parentId: "",
+  })
 
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -135,7 +143,6 @@ export default function CategoriesPage() {
   }
 
   const handleEditCategory = (category: Category) => {
-
     setEditingCategory(category)
 
     // Reset states trước khi set mới
@@ -228,13 +235,23 @@ export default function CategoriesPage() {
           ),
         )
       } else {
-        console.warn("Xóa danh mục chính chưa được triển khai trong backend")
+        await deleteMainCategory(categoryId)
         setCategories((prev) => prev.filter((cat) => cat.id !== categoryId))
       }
+      setDeleteConfirmDialog({ isOpen: false, categoryId: "", categoryName: "", parentId: "" })
     } catch (error) {
       console.error("Không thể xóa danh mục:", error)
       setError("Không thể xóa danh mục. Vui lòng thử lại.")
     }
+  }
+
+  const openDeleteConfirmDialog = (categoryId: string, categoryName: string, parentId?: string) => {
+    setDeleteConfirmDialog({
+      isOpen: true,
+      categoryId,
+      categoryName,
+      parentId: parentId || "",
+    })
   }
 
   const getParentCategories = () => {
@@ -654,7 +671,7 @@ export default function CategoriesPage() {
                           size="sm"
                           variant="outline"
                           className="text-red-600 border-red-600 hover:bg-red-50"
-                          onClick={() => handleDeleteCategory(category.id)}
+                          onClick={() => openDeleteConfirmDialog(category.id, category.name)}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -691,7 +708,7 @@ export default function CategoriesPage() {
                                 size="sm"
                                 variant="outline"
                                 className="text-red-600 border-red-600 hover:bg-red-50"
-                                onClick={() => handleDeleteCategory(subcategory.id, category.id)}
+                                onClick={() => openDeleteConfirmDialog(subcategory.id, subcategory.name, category.id)}
                               >
                                 <Trash2 className="w-4 h-4" />
                               </Button>
@@ -706,6 +723,56 @@ export default function CategoriesPage() {
             </CardContent>
           </Card>
         </>
+      )}
+      {deleteConfirmDialog.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+            <div className="p-6">
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                  <Trash2 className="w-6 h-6 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Xác nhận xóa danh mục</h3>
+                  <p className="text-sm text-gray-500">Hành động này không thể hoàn tác</p>
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <p className="text-gray-700">
+                  Bạn có chắc chắn muốn xóa danh mục{" "}
+                  <span className="font-semibold text-red-600">"{deleteConfirmDialog.categoryName}"</span>?
+                </p>
+                {!deleteConfirmDialog.parentId && (
+                  <p className="text-sm text-amber-600 mt-2 bg-amber-50 p-2 rounded">
+                    ⚠️ Xóa danh mục chính sẽ xóa tất cả danh mục con bên trong.
+                  </p>
+                )}
+              </div>
+
+              <div className="flex space-x-3">
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    setDeleteConfirmDialog({ isOpen: false, categoryId: "", categoryName: "", parentId: "" })
+                  }
+                  className="flex-1"
+                >
+                  Hủy bỏ
+                </Button>
+                <Button
+                  onClick={() =>
+                    handleDeleteCategory(deleteConfirmDialog.categoryId, deleteConfirmDialog.parentId || undefined)
+                  }
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Xóa danh mục
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

@@ -87,6 +87,12 @@ export const getAllMainCategories = async (): Promise<Category[]> => {
     return categories;
 };
 
+export const deleteMainCategory = async (id: string) => {
+  const response = await authenticatedFetch(`${API_BASE_URL}/mainCategory/delete/${id}`, {
+    method: 'DELETE',
+  });
+  return handleResponse(response);
+};
 
 // Sub Category API
 export const createSubCategory = async (mainCategoryId: string, subCategoryName: string, file?: File) => {
