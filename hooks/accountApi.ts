@@ -6,7 +6,7 @@ interface AccountResponse {
   id: string;
   email: string;
   username?: string;
-  status: 'ACTIVE' | 'INACTIVE' | 'BANNED';
+  status: 'ACTIVE' | 'BANNED'; // ← Removed 'INACTIVE'
   createdAt: string;
   banEndDate?: string;
   roles: Array<{ name: string; description: string; permissions: any[] }>;
@@ -90,15 +90,17 @@ export const useAccountsApi = () => {
     }
   };
 
-  // ← POST /accounts/{id}/manage
+  // ← POST /accounts/{id}/manage - Updated to remove ban-permanent
   const manageAccount = async (
     accountId: string, 
-    action: 'ban' | 'ban-permanent' | 'activate',
+    action: 'ban' | 'activate',
     days?: number
   ): Promise<string> => {
     try {
       const params = new URLSearchParams({ action });
-      if (days) params.append('days', days.toString());
+      if (action === 'ban' && days) {
+        params.append('days', days.toString());
+      }
 
       const response = await authenticatedFetch(
         `http://localhost:8080/accounts/${accountId}/manage?${params.toString()}`,
@@ -117,20 +119,30 @@ export const useAccountsApi = () => {
     }
   };
 
-  // ← GET /accounts/search
-  const searchAccountsByEmail = async (keyword: string) => {
+  // ← GET /accounts/search - Search by email
+  const searchAccountsByEmail = async (keyword: string): Promise<AccountResponse[]> => {
     try {
-      const response = await authenticatedFetch(
-        `http://localhost:8080/accounts/search?keyword=${encodeURIComponent(keyword)}`,
-        { method: 'GET' }
-      );
+      const url = `http://localhost:8080/accounts/search?keyword=${encodeURIComponent(keyword)}`;
+      console.log('🌐 Making search request to:', url);
+      
+      const response = await authenticatedFetch(url, { method: 'GET' });
+      
+      console.log('📡 Search response status:', response.status);
+      console.log('📡 Search response ok:', response.ok);
 
       if (!response.ok) {
+        console.error('❌ Search response not ok:', response.status, response.statusText);
         throw new Error(`Failed to search accounts: ${response.status}`);
       }
 
-      const apiResponse: ApiResponse<any[]> = await response.json();
-      return apiResponse.result;
+      const responseText = await response.text();
+      console.log('📄 Raw response text:', responseText);
+      
+      const apiResponse: ApiResponse<AccountResponse[]> = JSON.parse(responseText);
+      console.log('📦 Parsed API response:', apiResponse);
+      console.log('📦 API response result:', apiResponse.result);
+      
+      return apiResponse.result || [];
     } catch (error) {
       console.error('❌ Failed to search accounts:', error);
       throw error;
@@ -157,7 +169,7 @@ export const useAccountsApi = () => {
     }
   };
 
-  // ← GET /recipe/count/{accountId} - Get recipe count for specific user
+  // ← GET /recipe/count/{accountId} - Fixed method
   const getRecipeCountByUser = async (accountId: string): Promise<number> => {
     try {
       const response = await authenticatedFetch(
@@ -166,14 +178,15 @@ export const useAccountsApi = () => {
       );
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch recipe count: ${response.status}`);
+        console.warn(`Failed to get recipe count for user ${accountId}: ${response.status}`);
+        return 0; // Return 0 as fallback instead of throwing error
       }
 
       const apiResponse: ApiResponse<number> = await response.json();
-      return apiResponse.result;
+      return apiResponse.result || 0;
     } catch (error) {
-      console.error('❌ Failed to fetch recipe count:', error);
-      return 0; // Return 0 if error
+      console.warn(`Failed to get recipe count for user ${accountId}:`, error);
+      return 0; // Return 0 as fallback
     }
   };
 
