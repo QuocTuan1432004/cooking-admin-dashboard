@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Header } from "@/components/ui/header"
 import { Button } from "@/components/ui/button"
@@ -13,13 +13,11 @@ import { Upload, Save, ArrowLeft, Clock, ChefHat, ImageIcon, X, Search, Plus, Ed
 import Image from "next/image"
 import { IngredientSelectModal } from "@/components/ingredient-select-modal"
 import { InstructionAddModal, type Instruction } from "@/components/instruction-add-modal"
-import type { Ingredient } from "@/components/ingredient-add-modal"
-
-interface Category {
-  id: number
-  name: string
-  children?: Category[]
-}
+// Import API functions
+import { getAllMainCategories } from "@/hooks/categoryApi/categoryApi"
+import { getAllIngredients } from "@/hooks/RecipeApi/ingredientsApi"
+import type { Category } from "@/hooks/categoryApi/types"
+import type { Ingredient } from "@/hooks/RecipeApi/recipeTypes"
 
 interface Recipe {
   title: string
@@ -43,62 +41,11 @@ export default function CreateRecipePage() {
   const [editingInstructionIndex, setEditingInstructionIndex] = useState<number | null>(null)
   const [detailedInstructions, setDetailedInstructions] = useState<Instruction[]>([])
 
-  // Sample ingredients data
-  const [ingredients] = useState<Ingredient[]>([
-    { id: 1, name: "Thịt heo", calories: 250 },
-    { id: 2, name: "Cà chua", calories: 18 },
-    { id: 3, name: "Hành tây", calories: 40 },
-    { id: 4, name: "Gạo tẻ", calories: 365 },
-    { id: 5, name: "Dầu ăn", calories: 884 },
-    { id: 6, name: "Gà ta", calories: 239 },
-    { id: 7, name: "Gừng tươi", calories: 80 },
-    { id: 8, name: "Nước mắm", calories: 10 },
-    { id: 9, name: "Đường trắng", calories: 387 },
-    { id: 10, name: "Tiêu đen", calories: 251 },
-  ])
-
-  // Sample categories data
-  const categories: Category[] = [
-    {
-      id: 1,
-      name: "Món chính",
-      children: [
-        { id: 11, name: "Món xào" },
-        { id: 12, name: "Món kho" },
-        { id: 13, name: "Món nướng" },
-        { id: 14, name: "Món luộc" },
-      ],
-    },
-    {
-      id: 2,
-      name: "Món canh",
-      children: [
-        { id: 21, name: "Canh chua" },
-        { id: 22, name: "Canh ngọt" },
-        { id: 23, name: "Súp" },
-      ],
-    },
-    {
-      id: 3,
-      name: "Món tráng miệng",
-      children: [
-        { id: 31, name: "Bánh ngọt" },
-        { id: 32, name: "Chè" },
-        { id: 33, name: "Kem" },
-        { id: 34, name: "Trái cây" },
-      ],
-    },
-    {
-      id: 4,
-      name: "Đồ uống",
-      children: [
-        { id: 41, name: "Sinh tố" },
-        { id: 42, name: "Nước ép" },
-        { id: 43, name: "Trà" },
-        { id: 44, name: "Cà phê" },
-      ],
-    },
-  ]
+  // State for API data
+  const [categories, setCategories] = useState<Category[]>([])
+  const [ingredients, setIngredients] = useState<Ingredient[]>([])
+  const [loadingCategories, setLoadingCategories] = useState(true)
+  const [loadingIngredients, setLoadingIngredients] = useState(true)
 
   const [recipe, setRecipe] = useState<Recipe>({
     title: "",
@@ -131,7 +78,7 @@ export default function CreateRecipePage() {
   }
 
   const getSubCategories = () => {
-    const parentCat = categories.find((cat) => cat.id.toString() === recipe.parentCategory)
+    const parentCat = categories.find((cat) => cat.id === recipe.parentCategory)
     return parentCat?.children || []
   }
 
@@ -284,6 +231,38 @@ export default function CreateRecipePage() {
         return "text-gray-600 bg-gray-100"
     }
   }
+
+  // Load data from APIs
+  useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        setLoadingCategories(true)
+        const categoriesData = await getAllMainCategories()
+        setCategories(categoriesData)
+      } catch (error) {
+        console.error('Error loading categories:', error)
+        // Show error message to user
+      } finally {
+        setLoadingCategories(false)
+      }
+    }
+
+    const loadIngredients = async () => {
+      try {
+        setLoadingIngredients(true)
+        const ingredientsData = await getAllIngredients()
+        setIngredients(ingredientsData)
+      } catch (error) {
+        console.error('Error loading ingredients:', error)
+        // Show error message to user
+      } finally {
+        setLoadingIngredients(false)
+      }
+    }
+
+    loadCategories()
+    loadIngredients()
+  }, [])
 
   return (
     <>
@@ -469,13 +448,17 @@ export default function CreateRecipePage() {
                     <Label htmlFor="parentCategory">
                       Danh mục chính <span className="text-red-500">*</span>
                     </Label>
-                    <Select value={recipe.parentCategory} onValueChange={handleParentCategoryChange}>
+                    <Select 
+                      value={recipe.parentCategory} 
+                      onValueChange={handleParentCategoryChange}
+                      disabled={loadingCategories}
+                    >
                       <SelectTrigger className={errors.parentCategory ? "border-red-500" : ""}>
-                        <SelectValue placeholder="Chọn danh mục chính" />
+                        <SelectValue placeholder={loadingCategories ? "Đang tải..." : "Chọn danh mục chính"} />
                       </SelectTrigger>
                       <SelectContent>
                         {categories.map((category) => (
-                          <SelectItem key={category.id} value={category.id.toString()}>
+                          <SelectItem key={category.id} value={category.id}>
                             {category.name}
                           </SelectItem>
                         ))}
@@ -491,14 +474,14 @@ export default function CreateRecipePage() {
                     <Select
                       value={recipe.subCategory}
                       onValueChange={(value) => handleInputChange("subCategory", value)}
-                      disabled={!recipe.parentCategory}
+                      disabled={!recipe.parentCategory || loadingCategories}
                     >
                       <SelectTrigger className={errors.subCategory ? "border-red-500" : ""}>
                         <SelectValue placeholder="Chọn danh mục con" />
                       </SelectTrigger>
                       <SelectContent>
                         {getSubCategories().map((subCategory) => (
-                          <SelectItem key={subCategory.id} value={subCategory.id.toString()}>
+                          <SelectItem key={subCategory.id} value={subCategory.id}>
                             {subCategory.name}
                           </SelectItem>
                         ))}
@@ -638,7 +621,11 @@ export default function CreateRecipePage() {
               <Button type="button" variant="outline" onClick={() => router.back()}>
                 Hủy
               </Button>
-              <Button type="submit" disabled={isLoading} className="bg-orange-500 hover:bg-orange-600">
+              <Button 
+                type="submit" 
+                disabled={isLoading || loadingCategories || loadingIngredients} 
+                className="bg-orange-500 hover:bg-orange-600"
+              >
                 <Save className="w-4 h-4 mr-2" />
                 {isLoading ? "Đang lưu..." : "Tạo công thức"}
               </Button>

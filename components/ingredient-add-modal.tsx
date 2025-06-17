@@ -6,22 +6,19 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Save } from "lucide-react"
-
-export interface Ingredient {
-  id: number
-  name: string
-  calories: number
-}
+import { createIngredient } from "@/hooks/RecipeApi/ingredientsApi"
+import type { Ingredient, IngredientsCreationRequest } from "@/hooks/RecipeApi/recipeTypes"
 
 interface IngredientAddModalProps {
   isOpen: boolean
   onClose: () => void
-  onSave: (ingredient: Omit<Ingredient, "id">) => void
+  onSave: (ingredient: Ingredient) => void
 }
 
 export function IngredientAddModal({ isOpen, onClose, onSave }: IngredientAddModalProps) {
   const [name, setName] = useState("")
   const [calories, setCalories] = useState("")
+  const [isLoading, setIsLoading] = useState(false) // Thêm loading state
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   const validateForm = (): boolean => {
@@ -41,21 +38,38 @@ export function IngredientAddModal({ isOpen, onClose, onSave }: IngredientAddMod
     return Object.keys(newErrors).length === 0
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!validateForm()) {
       return
     }
 
-    onSave({
-      name: name.trim(),
-      calories: Number(calories),
-    })
+    setIsLoading(true)
+    
+    try {
+      const ingredientData: IngredientsCreationRequest = {
+        ingredientName: name.trim(),
+        caloriesPerUnit: calories.trim(),
+      }
 
-    // Reset form
-    setName("")
-    setCalories("")
-    setErrors({})
-    onClose()
+      // Gọi API tạo ingredient
+      const response = await createIngredient(ingredientData)
+      
+      // Gọi callback với ingredient vừa tạo từ response
+      onSave(response)
+
+      // Reset form và đóng modal
+      setName("")
+      setCalories("")
+      setErrors({})
+      onClose()
+    } catch (error) {
+      console.error('Error creating ingredient:', error)
+      setErrors({ 
+        submit: error instanceof Error ? error.message : 'Có lỗi xảy ra khi tạo nguyên liệu' 
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleCancel = () => {
@@ -85,11 +99,21 @@ export function IngredientAddModal({ isOpen, onClose, onSave }: IngredientAddMod
           <DialogTitle className="flex items-center justify-between">
             <span>Thêm nguyên liệu mới</span>
             <div className="flex gap-2">
-              <Button size="sm" onClick={handleSave} className="bg-green-500 hover:bg-green-600">
+              <Button 
+                size="sm" 
+                onClick={handleSave} 
+                disabled={isLoading}
+                className="bg-green-500 hover:bg-green-600"
+              >
                 <Save className="w-4 h-4 mr-2" />
-                Lưu
+                {isLoading ? "Đang lưu..." : "Lưu"}
               </Button>
-              <Button size="sm" variant="outline" onClick={handleCancel}>
+              <Button 
+                size="sm" 
+                variant="outline" 
+                onClick={handleCancel}
+                disabled={isLoading}
+              >
                 Hủy
               </Button>
             </div>
@@ -106,6 +130,7 @@ export function IngredientAddModal({ isOpen, onClose, onSave }: IngredientAddMod
               onChange={(e) => handleInputChange("name", e.target.value)}
               className={`mt-1 ${errors.name ? "border-red-500" : ""}`}
               placeholder="VD: Thịt heo, Cà chua, Hành tây..."
+              disabled={isLoading}
             />
             {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
           </div>
@@ -122,10 +147,18 @@ export function IngredientAddModal({ isOpen, onClose, onSave }: IngredientAddMod
               onChange={(e) => handleInputChange("calories", e.target.value)}
               className={`mt-1 ${errors.calories ? "border-red-500" : ""}`}
               placeholder="VD: 250"
+              disabled={isLoading}
             />
             {errors.calories && <p className="text-red-500 text-sm mt-1">{errors.calories}</p>}
             <p className="text-gray-500 text-xs mt-1">Nhập số calo trên 100g nguyên liệu</p>
           </div>
+
+          {/* Hiển thị lỗi khi submit */}
+          {errors.submit && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+              <p className="text-red-800 text-sm">{errors.submit}</p>
+            </div>
+          )}
 
           <div className="bg-blue-50 p-3 rounded-lg">
             <h4 className="font-medium text-blue-800 mb-2">Lưu ý:</h4>
