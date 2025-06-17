@@ -1,253 +1,295 @@
-"use client";
+"use client"
 
-import { useState } from "react";
-import { Header } from "@/components/header";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useEffect } from "react"
+import { Header } from "@/components/ui/header"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Plus, Edit, Trash2, FolderOpen, Folder, Upload, X } from "lucide-react"
+import Image from "next/image"
+import { useRouter } from "next/navigation"
+import { useAuth } from "@/hooks/userAuth"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Plus,
-  Edit,
-  Trash2,
-  FolderOpen,
-  Folder,
-  Upload,
-  X,
-} from "lucide-react";
-import Image from "next/image";
-
-interface Category {
-  id: number;
-  name: string;
-  description?: string;
-  parentId?: number;
-  children?: Category[];
-  recipeCount: number;
-  image?: string;
-}
+  getAllMainCategories,
+  createMainCategory,
+  updateMainCategory,
+  createSubCategory,
+  updateSubCategory,
+  deleteSubCategory,
+  deleteMainCategory,
+} from "@/hooks/categoryApi/categoryApi"
+import type { Category } from "@/hooks/categoryApi/types"
 
 export default function CategoriesPage() {
-  const [categories, setCategories] = useState<Category[]>([
-    {
-      id: 1,
-      name: "Món chính",
-      description: "Các món ăn chính trong bữa cơm",
-      recipeCount: 45,
-      children: [
-        {
-          id: 11,
-          name: "Món xào",
-          parentId: 1,
-          recipeCount: 15,
-          image: "/placeholder.svg?height=60&width=60",
-        },
-        {
-          id: 12,
-          name: "Món kho",
-          parentId: 1,
-          recipeCount: 12,
-          image: "/placeholder.svg?height=60&width=60",
-        },
-        {
-          id: 13,
-          name: "Món nướng",
-          parentId: 1,
-          recipeCount: 18,
-          image: "/placeholder.svg?height=60&width=60",
-        },
-      ],
-    },
-    {
-      id: 2,
-      name: "Món canh",
-      description: "Các loại canh và súp",
-      recipeCount: 28,
-      children: [
-        {
-          id: 21,
-          name: "Canh chua",
-          parentId: 2,
-          recipeCount: 8,
-          image: "/placeholder.svg?height=60&width=60",
-        },
-        {
-          id: 22,
-          name: "Canh ngọt",
-          parentId: 2,
-          recipeCount: 12,
-          image: "/placeholder.svg?height=60&width=60",
-        },
-        {
-          id: 23,
-          name: "Súp",
-          parentId: 2,
-          recipeCount: 8,
-          image: "/placeholder.svg?height=60&width=60",
-        },
-      ],
-    },
-    {
-      id: 3,
-      name: "Món tráng miệng",
-      description: "Bánh kẹo và đồ ngọt",
-      recipeCount: 35,
-      children: [
-        {
-          id: 31,
-          name: "Bánh ngọt",
-          parentId: 3,
-          recipeCount: 20,
-          image: "/placeholder.svg?height=60&width=60",
-        },
-        {
-          id: 32,
-          name: "Chè",
-          parentId: 3,
-          recipeCount: 10,
-          image: "/placeholder.svg?height=60&width=60",
-        },
-        {
-          id: 33,
-          name: "Kem",
-          parentId: 3,
-          recipeCount: 5,
-          image: "/placeholder.svg?height=60&width=60",
-        },
-      ],
-    },
-    {
-      id: 4,
-      name: "Đồ uống",
-      description: "Nước uống và sinh tố",
-      recipeCount: 17,
-      children: [
-        {
-          id: 41,
-          name: "Sinh tố",
-          parentId: 4,
-          recipeCount: 8,
-          image: "/placeholder.svg?height=60&width=60",
-        },
-        {
-          id: 42,
-          name: "Nước ép",
-          parentId: 4,
-          recipeCount: 6,
-          image: "/placeholder.svg?height=60&width=60",
-        },
-        {
-          id: 43,
-          name: "Trà",
-          parentId: 4,
-          recipeCount: 3,
-          image: "/placeholder.svg?height=60&width=60",
-        },
-      ],
-    },
-  ]);
+  const router = useRouter()
+  const { logout } = useAuth()
+  const [unreadNotifications] = useState(3)
+  const [categories, setCategories] = useState<Category[]>([])
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null)
 
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
-  const [subCategoryImage, setSubCategoryImage] = useState<string>("");
+  // State cho create form
   const [newCategory, setNewCategory] = useState({
     name: "",
-    description: "",
     parentId: "",
-    image: "",
-  });
+    image: "" as string | File,
+  })
+  const [createSubCategoryImage, setCreateSubCategoryImage] = useState<string>("")
 
-  const handleImageUpload = (file: File) => {
+  // State cho edit form - tách riêng và để trống
+  const [editCategory, setEditCategory] = useState({
+    name: "",
+    parentId: "",
+    image: "" as string | File,
+  })
+  const [editSubCategoryImage, setEditSubCategoryImage] = useState<string>("")
+
+  const [deleteConfirmDialog, setDeleteConfirmDialog] = useState({
+    isOpen: false,
+    categoryId: "",
+    categoryName: "",
+    parentId: "",
+  })
+
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [isUpdateSubDialogOpen, setIsUpdateSubDialogOpen] = useState(false)
+  const [selectKey, setSelectKey] = useState(0)
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      setIsLoading(true)
+      setError(null)
+      try {
+        const categoriesWithSub = await getAllMainCategories()
+        setCategories(categoriesWithSub)
+      } catch (error) {
+        console.error("Không thể lấy danh mục:", error)
+        setError("Không thể tải danh mục. Vui lòng thử lại.")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchCategories()
+  }, [])
+
+  const handleCreateImageUpload = (file: File) => {
     if (file && file.type.startsWith("image/")) {
-      const reader = new FileReader();
+      setNewCategory((prev) => ({ ...prev, image: file }))
+      const reader = new FileReader()
       reader.onload = (e) => {
-        const result = e.target?.result as string;
-        setSubCategoryImage(result);
-        setNewCategory((prev) => ({ ...prev, image: result }));
-      };
-      reader.readAsDataURL(file);
+        const result = e.target?.result as string
+        setCreateSubCategoryImage(result)
+      }
+      reader.readAsDataURL(file)
     }
-  };
+  }
 
-  const handleCreateCategory = () => {
-    const id = Math.max(...categories.map((c) => c.id)) + 1;
-    const category: Category = {
-      id,
-      name: newCategory.name,
-      description: newCategory.description,
-      parentId: newCategory.parentId
-        ? Number.parseInt(newCategory.parentId)
-        : undefined,
-      recipeCount: 0,
-      image: newCategory.parentId ? newCategory.image : undefined,
-    };
+  const handleEditImageUpload = (file: File) => {
+    if (file && file.type.startsWith("image/")) {
+      setEditCategory((prev) => ({ ...prev, image: file }))
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const result = e.target?.result as string
+        setEditSubCategoryImage(result)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
 
-    if (newCategory.parentId) {
-      setCategories((prev) =>
-        prev.map((cat) => {
-          if (cat.id === Number.parseInt(newCategory.parentId)) {
-            return {
-              ...cat,
-              children: [...(cat.children || []), category],
-            };
-          }
-          return cat;
+  const handleCreateCategory = async () => {
+    try {
+      if (newCategory.parentId) {
+        const newSubCategory = await createSubCategory(
+          newCategory.parentId,
+          newCategory.name,
+          newCategory.image as File,
+        )
+        setCategories((prev) =>
+          prev.map((cat) =>
+            cat.id === newCategory.parentId ? { ...cat, children: [...(cat.children || []), newSubCategory] } : cat,
+          ),
+        )
+      } else {
+        const newMainCategory = await createMainCategory({
+          categoryName: newCategory.name,
         })
-      );
-    } else {
-      setCategories((prev) => [...prev, { ...category, children: [] }]);
+        // Đảm bảo category mới có đầy đủ thông tin
+        const categoryToAdd = {
+          ...newMainCategory,
+          children: newMainCategory.children || [],
+          recipeCount: newMainCategory.recipeCount || 0,
+        }
+        setCategories((prev) => [...prev, categoryToAdd])
+        // Force re-render Select component
+        setSelectKey((prev) => prev + 1)
+      }
+      setNewCategory({ name: "", parentId: "", image: "" })
+      setCreateSubCategoryImage("")
+    } catch (error) {
+      console.error("Không thể tạo danh mục:", error)
+      setError("Không thể tạo danh mục. Vui lòng thử lại.")
     }
+  }
 
-    setNewCategory({ name: "", description: "", parentId: "", image: "" });
-    setSubCategoryImage("");
-    setIsCreateDialogOpen(false);
-  };
+  const resetEditStates = () => {
+    setEditCategory({ name: "", parentId: "", image: "" })
+    setEditSubCategoryImage("")
+    setEditingCategory(null)
+    setIsEditDialogOpen(false)
+    setIsUpdateSubDialogOpen(false)
+  }
 
   const handleEditCategory = (category: Category) => {
-    setEditingCategory(category);
-    setIsEditDialogOpen(true);
-  };
+    setEditingCategory(category)
 
-  const handleDeleteCategory = (categoryId: number, parentId?: number) => {
-    if (parentId) {
-      setCategories((prev) =>
-        prev.map((cat) => {
-          if (cat.id === parentId) {
-            return {
-              ...cat,
-              children:
-                cat.children?.filter((child) => child.id !== categoryId) || [],
-            };
-          }
-          return cat;
-        })
-      );
+    // Reset states trước khi set mới
+    setIsEditDialogOpen(false)
+    setIsUpdateSubDialogOpen(false)
+    setEditSubCategoryImage("")
+
+    // Để tất cả các trường trống - người dùng chỉ điền những gì muốn thay đổi
+    setEditCategory({
+      name: "",
+      parentId: "",
+      image: "",
+    })
+
+    // Phân biệt main category và subcategory
+    const isSubcategory = categories.some((mainCat) => mainCat.children?.some((child) => child.id === category.id))
+
+    if (isSubcategory) {
+      console.log("Opening subcategory dialog")
+      setIsUpdateSubDialogOpen(true)
     } else {
-      setCategories((prev) => prev.filter((cat) => cat.id !== categoryId));
+      console.log("Opening main category dialog")
+      setIsEditDialogOpen(true)
     }
-  };
+  }
+
+  const handleUpdateMainCategory = async (id: string, name: string) => {
+    try {
+      if (!name) {
+        setError("Vui lòng nhập tên danh mục để cập nhật")
+        return
+      }
+      const updatedCategory = await updateMainCategory(id, {
+        categoryName: name,
+      })
+      setCategories((prev) => prev.map((cat) => (cat.id === id ? { ...updatedCategory, children: cat.children } : cat)))
+      resetEditStates()
+    } catch (error) {
+      console.error("Failed to update main category:", error)
+      setError(error instanceof Error ? error.message : "Không thể cập nhật danh mục chính. Vui lòng thử lại.")
+    }
+  }
+
+  const handleUpdateSubCategory = async () => {
+    try {
+      if (!editingCategory) {
+        setError("Không tìm thấy danh mục để cập nhật")
+        return
+      }
+
+      // Kiểm tra xem có ít nhất một trường được điền không
+      const hasNameChange = editCategory.name.trim() !== ""
+      const hasParentChange = editCategory.parentId !== ""
+      const hasImageChange = editCategory.image !== ""
+
+      if (!hasNameChange && !hasParentChange && !hasImageChange) {
+        setError("Vui lòng điền ít nhất một trường để cập nhật")
+        return
+      }
+
+      // Gửi dữ liệu trực tiếp - rỗng thì gửi rỗng
+      await updateSubCategory(
+        editingCategory.id,
+        editCategory.name.trim(), // Gửi tên mới hoặc rỗng
+        editCategory.parentId, // Gửi parentId mới hoặc rỗng
+        editCategory.image instanceof File ? editCategory.image : undefined,
+      )
+
+      // Refresh lại toàn bộ categories thay vì cập nhật state phức tạp
+      const updatedCategories = await getAllMainCategories()
+      setCategories(updatedCategories)
+
+      resetEditStates()
+      setError(null)
+    } catch (error) {
+      console.error("Failed to update subcategory:", error)
+      setError(error instanceof Error ? error.message : "Không thể cập nhật danh mục con. Vui lòng thử lại.")
+    }
+  }
+
+  const handleDeleteCategory = async (categoryId: string, parentId?: string) => {
+    try {
+      if (parentId) {
+        await deleteSubCategory(categoryId)
+        setCategories((prev) =>
+          prev.map((cat) =>
+            cat.id === parentId
+              ? { ...cat, children: cat.children?.filter((child) => child.id !== categoryId) || [] }
+              : cat,
+          ),
+        )
+      } else {
+        await deleteMainCategory(categoryId)
+        setCategories((prev) => prev.filter((cat) => cat.id !== categoryId))
+      }
+      setDeleteConfirmDialog({ isOpen: false, categoryId: "", categoryName: "", parentId: "" })
+    } catch (error) {
+      console.error("Không thể xóa danh mục:", error)
+      setError("Không thể xóa danh mục. Vui lòng thử lại.")
+    }
+  }
+
+  const openDeleteConfirmDialog = (categoryId: string, categoryName: string, parentId?: string) => {
+    setDeleteConfirmDialog({
+      isOpen: true,
+      categoryId,
+      categoryName,
+      parentId: parentId || "",
+    })
+  }
 
   const getParentCategories = () => {
-    return categories.filter((cat) => !cat.parentId);
-  };
+    const parentCats = categories.filter((cat) => cat.id && (!cat.parentId || cat.parentId === ""))
+    return parentCats
+  }
 
-  const handleLogout = () => {
-    // Implement logout logic here
-    console.log("Đăng xuất thành công");
-    // You can add your logout logic here, such as:
-    // - Clear user session
-    // - Redirect to login page
-    // - Call logout API
-    alert("Đã đăng xuất thành công!");
-  };
+  const getCurrentParentCategory = () => {
+    if (editingCategory) {
+      // Tìm parent category chứa subcategory này
+      for (const mainCat of categories) {
+        if (mainCat.children?.some((child) => child.id === editingCategory.id)) {
+          return mainCat
+        }
+      }
+    }
+    return null
+  }
+
+  const handleLogout = async () => {
+    await logout()
+  }
+
+  // Kiểm tra xem có ít nhất một trường được điền không
+  const hasChanges = () => {
+    return editCategory.name.trim() !== "" || editCategory.parentId !== "" || editCategory.image !== ""
+  }
+
+  // Kiểm tra xem có thực sự thay đổi gì không
+  const hasActualChanges = () => {
+    if (!editingCategory) return false
+
+    const nameChanged = editCategory.name.trim() !== "" && editCategory.name.trim() !== editingCategory.name
+    const parentChanged = editCategory.parentId !== "" && editCategory.parentId !== editingCategory.parentId
+    const imageChanged = editCategory.image !== ""
+
+    return nameChanged || parentChanged || imageChanged
+  }
 
   return (
     <div>
@@ -256,254 +298,482 @@ export default function CategoriesPage() {
         showSearch={false}
         userName="Nguyễn Huỳnh Quốc Tuấn"
         onLogout={handleLogout}
+        notificationCount={unreadNotifications}
       />
-
-      {/* Create Category Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-        {/* Create Main Category */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <FolderOpen className="w-5 h-5 mr-2 text-orange-500" />
-              Tạo danh mục chính
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="main-category-name">Tên danh mục</Label>
-              <Input
-                id="main-category-name"
-                placeholder="Nhập tên danh mục chính"
-                value={newCategory.parentId === "" ? newCategory.name : ""}
-                onChange={(e) =>
-                  setNewCategory((prev) => ({
-                    ...prev,
-                    name: e.target.value,
-                    parentId: "",
-                  }))
-                }
-              />
-            </div>
-            <div></div>
-            <Button
-              onClick={handleCreateCategory}
-              className="w-full bg-orange-500 hover:bg-orange-600"
-              disabled={!newCategory.name}
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Tạo danh mục chính
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Create Subcategory */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Folder className="w-5 h-5 mr-2 text-blue-500" />
-              Tạo danh mục con
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="parent-category">Danh mục cha</Label>
-              <Select
-                value={newCategory.parentId}
-                onValueChange={(value) =>
-                  setNewCategory((prev) => ({ ...prev, parentId: value }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Chọn danh mục cha" />
-                </SelectTrigger>
-                <SelectContent>
-                  {getParentCategories().map((category) => (
-                    <SelectItem
-                      key={category.id}
-                      value={category.id.toString()}
-                    >
-                      {category.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="sub-category-name">Tên danh mục con</Label>
-              <Input
-                id="sub-category-name"
-                placeholder="Nhập tên danh mục con"
-                value={newCategory.parentId !== "" ? newCategory.name : ""}
-                onChange={(e) =>
-                  setNewCategory((prev) => ({ ...prev, name: e.target.value }))
-                }
-              />
-            </div>
-            <div>
-              <Label htmlFor="sub-category-image">Hình ảnh danh mục</Label>
-              <div className="space-y-3">
-                {subCategoryImage ? (
-                  <div className="relative inline-block">
-                    <Image
-                      src={subCategoryImage || "/placeholder.svg"}
-                      alt="Preview"
-                      width={100}
-                      height={100}
-                      className="rounded-lg object-cover border"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="absolute -top-2 -right-2 bg-white"
-                      onClick={() => {
-                        setSubCategoryImage("");
-                        setNewCategory((prev) => ({ ...prev, image: "" }));
-                      }}
-                    >
-                      <X className="w-3 h-3" />
-                    </Button>
+      {error && <p className="text-red-500 text-center my-4">{error}</p>}
+      {isLoading ? (
+        <p className="text-center my-4">Đang tải...</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <FolderOpen className="w-5 h-5 mr-2 text-orange-500" />
+                  Tạo danh mục chính
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="main-category-name">Tên danh mục</Label>
+                  <Input
+                    id="main-category-name"
+                    placeholder="Nhập tên danh mục chính"
+                    value={newCategory.parentId === "" ? newCategory.name : ""}
+                    onChange={(e) =>
+                      setNewCategory((prev) => ({
+                        ...prev,
+                        name: e.target.value,
+                        parentId: "",
+                      }))
+                    }
+                  />
+                </div>
+                <Button
+                  onClick={handleCreateCategory}
+                  className="w-full bg-orange-500 hover:bg-orange-600"
+                  disabled={!newCategory.name || newCategory.parentId !== ""}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Tạo danh mục chính
+                </Button>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Folder className="w-5 h-5 mr-2 text-blue-500" />
+                  Tạo danh mục con
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="parent-category">Danh mục cha</Label>
+                  <Select
+                    key={selectKey}
+                    value={newCategory.parentId}
+                    onValueChange={(value) => setNewCategory((prev) => ({ ...prev, parentId: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Chọn danh mục cha" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {getParentCategories().map((category) => (
+                        <SelectItem key={category.id || `temp-${category.name}`} value={category.id}>
+                          {category.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="sub-category-name">Tên danh mục con</Label>
+                  <Input
+                    id="sub-category-name"
+                    placeholder="Nhập tên danh mục con"
+                    value={newCategory.parentId !== "" ? newCategory.name : ""}
+                    onChange={(e) => setNewCategory((prev) => ({ ...prev, name: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="sub-category-image">Hình ảnh danh mục</Label>
+                  <div className="space-y-3">
+                    {createSubCategoryImage ? (
+                      <div className="relative inline-block">
+                        <Image
+                          src={createSubCategoryImage || "/placeholder.svg"}
+                          alt="Preview"
+                          width={100}
+                          height={100}
+                          className="rounded-lg object-cover border"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="absolute -top-2 -right-2 bg-white"
+                          onClick={() => {
+                            setCreateSubCategoryImage("")
+                            setNewCategory((prev) => ({ ...prev, image: "" }))
+                          }}
+                        >
+                          <X className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-400 transition-colors">
+                        <Upload className="w-8 h-8 mx-auto text-gray-400 mb-2" />
+                        <p className="text-sm text-gray-600 mb-2">Chọn hình ảnh</p>
+                        <label htmlFor="sub-image-upload" className="cursor-pointer">
+                          <span className="text-blue-600 hover:text-blue-700 font-medium">Tải lên file</span>
+                          <input
+                            id="sub-image-upload"
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0]
+                              if (file) handleCreateImageUpload(file)
+                            }}
+                          />
+                        </label>
+                        <p className="text-xs text-gray-500 mt-1">PNG, JPG, GIF</p>
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-400 transition-colors">
-                    <Upload className="w-8 h-8 mx-auto text-gray-400 mb-2" />
-                    <p className="text-sm text-gray-600 mb-2">Chọn hình ảnh</p>
-                    <label
-                      htmlFor="sub-image-upload"
-                      className="cursor-pointer"
-                    >
-                      <span className="text-blue-600 hover:text-blue-700 font-medium">
-                        Tải lên file
-                      </span>
-                      <input
-                        id="sub-image-upload"
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) handleImageUpload(file);
-                        }}
-                      />
-                    </label>
-                    <p className="text-xs text-gray-500 mt-1">PNG, JPG, GIF</p>
-                  </div>
-                )}
-              </div>
-            </div>
-            <Button
-              onClick={handleCreateCategory}
-              className="w-full bg-blue-500 hover:bg-blue-600"
-              disabled={!newCategory.name || !newCategory.parentId}
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Tạo danh mục con
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Categories Display */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Danh sách danh mục</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-6">
-            {categories.map((category) => (
-              <div
-                key={category.id}
-                className="border rounded-lg p-4 bg-gray-50"
-              >
-                {/* Main Category */}
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center space-x-3">
-                    <FolderOpen className="w-6 h-6 text-orange-500" />
-                    <div>
-                      <h3 className="font-semibold text-lg">{category.name}</h3>
-                      {category.description && (
-                        <p className="text-gray-600 text-sm">
-                          {category.description}
-                        </p>
-                      )}
-                      <p className="text-gray-500 text-xs">
-                        {category.recipeCount} công thức
-                      </p>
+                </div>
+                <Button
+                  onClick={handleCreateCategory}
+                  className="w-full bg-blue-500 hover:bg-blue-600"
+                  disabled={!newCategory.name || !newCategory.parentId}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Tạo danh mục con
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+          {isEditDialogOpen && editingCategory && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                <div className="sticky top-0 bg-white border-b px-6 py-4 rounded-t-xl">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <FolderOpen className="w-6 h-6 text-orange-500" />
+                      <div>
+                        <h2 className="text-xl font-bold text-gray-900">Chỉnh sửa danh mục chính</h2>
+                        <p className="text-sm text-gray-500">Nhập tên mới để cập nhật danh mục</p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex space-x-2">
                     <Button
+                      variant="ghost"
                       size="sm"
-                      variant="outline"
-                      onClick={() => handleEditCategory(category)}
+                      onClick={() => {
+                        resetEditStates()
+                      }}
+                      className="text-gray-400 hover:text-gray-600"
                     >
-                      <Edit className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-red-600 border-red-600 hover:bg-red-50"
-                      onClick={() => handleDeleteCategory(category.id)}
-                    >
-                      <Trash2 className="w-4 h-4" />
+                      <X className="w-5 h-5" />
                     </Button>
                   </div>
                 </div>
+                <div className="p-6 space-y-4">
+                  <div className="bg-gray-50 p-3 rounded-lg border">
+                    <div className="flex items-center space-x-2">
+                      <FolderOpen className="w-4 h-4 text-gray-600" />
+                      <span className="text-sm font-medium text-gray-800">Tên hiện tại:</span>
+                      <span className="text-sm text-gray-700">{editingCategory.name}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-category-name">Tên danh mục mới</Label>
+                    <Input
+                      id="edit-category-name"
+                      value={editCategory.name}
+                      onChange={(e) => setEditCategory((prev) => ({ ...prev, name: e.target.value }))}
+                      className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      placeholder="Nhập tên danh mục mới"
+                    />
+                  </div>
+                </div>
+                <div className="sticky bottom-0 bg-gray-50 px-6 py-4 rounded-b-xl border-t">
+                  <div className="flex space-x-3 justify-end">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        resetEditStates()
+                      }}
+                      className="px-6 py-2 border-gray-300 text-gray-700 hover:bg-gray-100"
+                    >
+                      Hủy bỏ
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        handleUpdateMainCategory(editingCategory.id, editCategory.name)
+                      }}
+                      className="px-6 py-2 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white shadow-md hover:shadow-lg transition-all"
+                      disabled={!editCategory.name.trim()}
+                    >
+                      <Edit className="w-4 h-4 mr-2" />
+                      Lưu thay đổi
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          {isUpdateSubDialogOpen && editingCategory && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+                <div className="bg-white border-b px-6 py-4 rounded-t-xl">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <Folder className="w-6 h-6 text-blue-500" />
+                      <div>
+                        <h2 className="text-xl font-bold text-gray-900">Chỉnh sửa danh mục con</h2>
+                        <p className="text-sm text-gray-500">Chỉ điền những trường muốn thay đổi</p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        resetEditStates()
+                      }}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      <X className="w-5 h-5" />
+                    </Button>
+                  </div>
+                </div>
+                <div className="p-6 space-y-4">
+                  {/* Hiển thị thông tin hiện tại */}
+                  <div className="bg-gray-50 p-3 rounded-lg border space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <Folder className="w-4 h-4 text-gray-600" />
+                      <span className="text-sm font-medium text-gray-800">Tên hiện tại:</span>
+                      <span className="text-sm text-gray-700">{editingCategory.name}</span>
+                    </div>
+                    {getCurrentParentCategory() && (
+                      <div className="flex items-center space-x-2">
+                        <FolderOpen className="w-4 h-4 text-gray-600" />
+                        <span className="text-sm font-medium text-gray-800">Danh mục cha hiện tại:</span>
+                        <span className="text-sm text-gray-700">{getCurrentParentCategory()?.name}</span>
+                      </div>
+                    )}
+                  </div>
 
-                {/* Subcategories */}
-                {category.children && category.children.length > 0 && (
-                  <div className="ml-8 space-y-2">
-                    {category.children.map((subcategory) => (
-                      <div
-                        key={subcategory.id}
-                        className="flex items-center justify-between p-3 bg-white rounded border"
-                      >
-                        <div className="flex items-center space-x-3">
-                          <Folder className="w-5 h-5 text-blue-500" />
-                          {subcategory.image && (
-                            <Image
-                              src={subcategory.image || "/placeholder.svg"}
-                              alt={subcategory.name}
-                              width={40}
-                              height={40}
-                              className="rounded object-cover"
-                            />
-                          )}
-                          <div>
-                            <h4 className="font-medium">{subcategory.name}</h4>
-                            <p className="text-gray-500 text-xs">
-                              {subcategory.recipeCount} công thức
-                            </p>
-                          </div>
+                  <div>
+                    <Label htmlFor="update-parent-category">Danh mục cha mới (tùy chọn)</Label>
+                    <Select
+                      key={`edit-${selectKey}`}
+                      value={editCategory.parentId}
+                      onValueChange={(value) => setEditCategory((prev) => ({ ...prev, parentId: value }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Chọn danh mục cha mới" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {getParentCategories().map((category) => (
+                          <SelectItem
+                            key={`update-${category.id}` || `update-temp-${category.name}`}
+                            value={category.id}
+                          >
+                            {category.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="update-sub-category-name">Tên danh mục con mới (tùy chọn)</Label>
+                    <Input
+                      id="update-sub-category-name"
+                      placeholder="Nhập tên danh mục con mới"
+                      value={editCategory.name}
+                      onChange={(e) => setEditCategory((prev) => ({ ...prev, name: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="update-sub-category-image">Hình ảnh danh mục mới (tùy chọn)</Label>
+                    <div className="space-y-3">
+                      {editSubCategoryImage ? (
+                        <div className="relative inline-block">
+                          <Image
+                            src={editSubCategoryImage || "/placeholder.svg"}
+                            alt="Preview"
+                            width={100}
+                            height={100}
+                            className="rounded-lg object-cover border"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="absolute -top-2 -right-2 bg-white"
+                            onClick={() => {
+                              setEditSubCategoryImage("")
+                              setEditCategory((prev) => ({ ...prev, image: "" }))
+                            }}
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
                         </div>
-                        <div className="flex space-x-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleEditCategory(subcategory)}
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-red-600 border-red-600 hover:bg-red-50"
-                            onClick={() =>
-                              handleDeleteCategory(subcategory.id, category.id)
-                            }
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                      ) : (
+                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-400 transition-colors">
+                          <Upload className="w-8 h-8 mx-auto text-gray-400 mb-2" />
+                          <p className="text-sm text-gray-600 mb-2">Chọn hình ảnh mới</p>
+                          <label htmlFor="update-sub-image-upload" className="cursor-pointer">
+                            <span className="text-blue-600 hover:text-blue-700 font-medium">Tải lên file</span>
+                            <input
+                              id="update-sub-image-upload"
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0]
+                                if (file) handleEditImageUpload(file)
+                              }}
+                            />
+                          </label>
+                          <p className="text-xs text-gray-500 mt-1">PNG, JPG, GIF</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex space-x-3 pt-4">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        resetEditStates()
+                      }}
+                      className="flex-1"
+                    >
+                      Hủy bỏ
+                    </Button>
+                    <Button
+                      onClick={handleUpdateSubCategory}
+                      className="flex-1 bg-blue-500 hover:bg-blue-600"
+                      disabled={!hasChanges()}
+                    >
+                      <Edit className="w-4 h-4 mr-2" />
+                      Cập nhật danh mục con
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          <Card>
+            <CardHeader>
+              <CardTitle>Danh sách danh mục</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                {categories.map((category) => (
+                  <div
+                    key={category.id || `main-${category.name}-${Date.now()}`}
+                    className="border rounded-lg p-4 bg-gray-50"
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center space-x-3">
+                        <FolderOpen className="w-6 h-6 text-orange-500" />
+                        <div>
+                          <h3 className="font-semibold text-lg">{category.name}</h3>
+                          <p className="text-gray-500 text-xs">{category.recipeCount} công thức</p>
                         </div>
                       </div>
-                    ))}
+                      <div className="flex space-x-2">
+                        <Button size="sm" variant="outline" onClick={() => handleEditCategory(category)}>
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-red-600 border-red-600 hover:bg-red-50"
+                          onClick={() => openDeleteConfirmDialog(category.id, category.name)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    {category.children && category.children.length > 0 && (
+                      <div className="ml-8 space-y-2">
+                        {category.children.map((subcategory) => (
+                          <div
+                            key={subcategory.id || `sub-${subcategory.name}-${category.id}`}
+                            className="flex items-center justify-between p-3 bg-white rounded border"
+                          >
+                            <div className="flex items-center space-x-3">
+                              <Folder className="w-5 h-5 text-blue-500" />
+                              {subcategory.image && (
+                                <Image
+                                  src={subcategory.image || "/placeholder.svg"}
+                                  alt={subcategory.name}
+                                  width={40}
+                                  height={40}
+                                  className="rounded object-cover"
+                                />
+                              )}
+                              <div>
+                                <h4 className="font-medium">{subcategory.name}</h4>
+                                <p className="text-gray-500 text-xs">{subcategory.recipeCount} công thức</p>
+                              </div>
+                            </div>
+                            <div className="flex space-x-2">
+                              <Button size="sm" variant="outline" onClick={() => handleEditCategory(subcategory)}>
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-red-600 border-red-600 hover:bg-red-50"
+                                onClick={() => openDeleteConfirmDialog(subcategory.id, subcategory.name, category.id)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </>
+      )}
+      {deleteConfirmDialog.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+            <div className="p-6">
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                  <Trash2 className="w-6 h-6 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Xác nhận xóa danh mục</h3>
+                  <p className="text-sm text-gray-500">Hành động này không thể hoàn tác</p>
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <p className="text-gray-700">
+                  Bạn có chắc chắn muốn xóa danh mục{" "}
+                  <span className="font-semibold text-red-600">"{deleteConfirmDialog.categoryName}"</span>?
+                </p>
+                {!deleteConfirmDialog.parentId && (
+                  <p className="text-sm text-amber-600 mt-2 bg-amber-50 p-2 rounded">
+                    ⚠️ Xóa danh mục chính sẽ xóa tất cả danh mục con bên trong.
+                  </p>
                 )}
               </div>
-            ))}
+
+              <div className="flex space-x-3">
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    setDeleteConfirmDialog({ isOpen: false, categoryId: "", categoryName: "", parentId: "" })
+                  }
+                  className="flex-1"
+                >
+                  Hủy bỏ
+                </Button>
+                <Button
+                  onClick={() =>
+                    handleDeleteCategory(deleteConfirmDialog.categoryId, deleteConfirmDialog.parentId || undefined)
+                  }
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Xóa danh mục
+                </Button>
+              </div>
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      )}
     </div>
-  );
+  )
 }

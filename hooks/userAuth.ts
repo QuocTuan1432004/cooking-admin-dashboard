@@ -216,12 +216,14 @@ export const authenticatedFetch = async (url: string, options: RequestInit = {})
   } : options.headers;
 
   // First API call
+
+const headers = options.body instanceof FormData ? 
+    { ...authHeaders } : 
+    { 'Content-Type': 'application/json', ...authHeaders };
+
   let response = await fetch(url, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...authHeaders
-    }
+    headers
   });
 
   // If 401 (Unauthorized), try to refresh token and retry
