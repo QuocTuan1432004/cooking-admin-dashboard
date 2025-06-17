@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Header } from "@/components/header";
 import { StatCard } from "@/components/stat-card";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,9 +13,31 @@ import {
 } from "lucide-react";
 import type { Recipe } from "@/components/recipe-detail-modal";
 import { RecipeManagement } from "@/components/recipe-management";
+import { useAccountsApi } from "@/hooks/accountApi";
 
 export default function Dashboard() {
+  const { getAllAccounts } = useAccountsApi();
   const [unreadNotifications] = useState(3);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch total users count
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      const response = await getAllAccounts(0, 1); // Get first page to get totalElements
+      setTotalUsers(response.totalElements);
+    } catch (error) {
+      console.error("Failed to fetch dashboard data:", error);
+      setTotalUsers(0);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const [pendingRecipes, setPendingRecipes] = useState<Recipe[]>([
     {
@@ -62,7 +84,7 @@ export default function Dashboard() {
     },
     {
       title: "Tổng số người đăng",
-      number: 50,
+      number: totalUsers, // ← Use dynamic data
       details: [
         { label: "Đang hoạt động", value: 45, color: "text-green-500" },
         { label: "Bị khóa", value: 5, color: "text-red-500" },
@@ -120,7 +142,9 @@ export default function Dashboard() {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Quản lý người dùng</p>
-                <p className="font-semibold">50 người dùng</p>
+                <p className="font-semibold">
+                  {loading ? "Đang tải..." : `${totalUsers.toLocaleString()} người dùng`}
+                </p>
               </div>
             </div>
           </CardContent>
