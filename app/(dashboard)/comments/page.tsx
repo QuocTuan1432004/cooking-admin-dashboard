@@ -24,6 +24,17 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Label } from "@/components/ui/label";
+import {
+  MessageSquare,
+  EyeOff,
+  Trash2,
+  Check,
+  Filter,
+  Search,
+  Flag,
+} from "lucide-react";
+import { useRouter } from "next/navigation";
 import {
   Dialog,
   DialogContent,
@@ -34,17 +45,13 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
-  MessageSquare,
-  EyeOff,
-  Edit,
-  Trash2,
-  Check,
-  Filter,
-  Search,
-} from "lucide-react";
-import { useRouter } from "next/navigation";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface Comment {
   id: number;
@@ -52,8 +59,9 @@ interface Comment {
   recipe: string;
   content: string;
   date: string;
-  status: "approved" | "hidden" | "pending";
+  status: "approved" | "pending" | "hidden";
   avatar?: string;
+  reported?: boolean;
 }
 
 export default function CommentsPage() {
@@ -68,6 +76,7 @@ export default function CommentsPage() {
       content: "Món này rất ngon, cảm ơn bạn đã chia sẻ!",
       date: "16/05/2025",
       status: "approved",
+      reported: false,
     },
     {
       id: 2,
@@ -75,7 +84,8 @@ export default function CommentsPage() {
       recipe: "Canh chua cá",
       content: "Có thể thêm ít rau thơm để tăng hương vị không?",
       date: "15/05/2025",
-      status: "approved",
+      status: "pending",
+      reported: false,
     },
     {
       id: 3,
@@ -84,6 +94,7 @@ export default function CommentsPage() {
       content: "Cách làm rất chi tiết, mình làm thành công ngay lần đầu!",
       date: "15/05/2025",
       status: "approved",
+      reported: false,
     },
     {
       id: 4,
@@ -92,6 +103,7 @@ export default function CommentsPage() {
       content: "Món này hơi ngọt quá, lần sau mình sẽ giảm đường.",
       date: "14/05/2025",
       status: "hidden",
+      reported: false,
     },
     {
       id: 5,
@@ -100,6 +112,7 @@ export default function CommentsPage() {
       content: "Nhanh mà ngon, rất phù hợp cho bữa tối bận rộn!",
       date: "14/05/2025",
       status: "pending",
+      reported: false,
     },
   ]);
 
@@ -108,8 +121,12 @@ export default function CommentsPage() {
   const [selectedRecipe, setSelectedRecipe] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [selectedDate, setSelectedDate] = useState("");
-  const [editingComment, setEditingComment] = useState<Comment | null>(null);
-  const [editContent, setEditContent] = useState("");
+  const [reportedComments, setReportedComments] = useState<number[]>([]);
+
+  const [reportingUser, setReportingUser] = useState<Comment | null>(null);
+  const [reportReasons, setReportReasons] = useState<string[]>([]);
+  const [reportDetails, setReportDetails] = useState("");
+  const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
 
   const handleLogout = () => {
     console.log("Đăng xuất thành công");
@@ -129,16 +146,6 @@ export default function CommentsPage() {
             Đã duyệt
           </Badge>
         );
-      case "hidden":
-        return (
-          <Badge
-            variant="secondary"
-            className="bg-gray-100 text-gray-800 hover:bg-gray-100"
-          >
-            <EyeOff className="w-3 h-3 mr-1" />
-            Ẩn
-          </Badge>
-        );
       case "pending":
         return (
           <Badge
@@ -149,6 +156,16 @@ export default function CommentsPage() {
             Chờ duyệt
           </Badge>
         );
+      case "hidden":
+        return (
+          <Badge
+            variant="secondary"
+            className="bg-gray-100 text-gray-800 hover:bg-gray-100"
+          >
+            <EyeOff className="w-3 h-3 mr-1" />
+            Đã ẩn
+          </Badge>
+        );
       default:
         return null;
     }
@@ -156,7 +173,7 @@ export default function CommentsPage() {
 
   const handleStatusChange = (
     commentId: number,
-    newStatus: "approved" | "hidden"
+    newStatus: "approved" | "pending" | "hidden"
   ) => {
     setComments((prev) =>
       prev.map((comment) =>
@@ -167,25 +184,6 @@ export default function CommentsPage() {
 
   const handleDeleteComment = (commentId: number) => {
     setComments((prev) => prev.filter((comment) => comment.id !== commentId));
-  };
-
-  const handleEditComment = (comment: Comment) => {
-    setEditingComment(comment);
-    setEditContent(comment.content);
-  };
-
-  const handleSaveEdit = () => {
-    if (editingComment) {
-      setComments((prev) =>
-        prev.map((comment) =>
-          comment.id === editingComment.id
-            ? { ...comment, content: editContent }
-            : comment
-        )
-      );
-      setEditingComment(null);
-      setEditContent("");
-    }
   };
 
   const handleSelectComment = (commentId: number) => {
@@ -244,12 +242,89 @@ export default function CommentsPage() {
     return {
       total: comments.length,
       approved: comments.filter((c) => c.status === "approved").length,
-      hidden: comments.filter((c) => c.status === "hidden").length,
       pending: comments.filter((c) => c.status === "pending").length,
+      hidden: comments.filter((c) => c.status === "hidden").length,
+      reported: comments.filter((c) => c.reported === true).length,
     };
   };
 
   const statusCounts = getStatusCounts();
+
+  const handleOpenReportDialog = (comment: Comment) => {
+    setReportingUser(comment);
+    setReportReasons([]);
+    setReportDetails("");
+    setIsReportDialogOpen(true);
+  };
+
+  const handleReportReasonChange = (reason: string, checked: boolean) => {
+    if (checked) {
+      setReportReasons((prev) => [...prev, reason]);
+    } else {
+      setReportReasons((prev) => prev.filter((r) => r !== reason));
+    }
+  };
+
+  const handleSubmitReport = () => {
+    if (reportingUser && reportReasons.length > 0) {
+      // Here you would typically send the report to your backend
+      console.log("Reporting user:", reportingUser.user);
+      console.log("Reasons:", reportReasons);
+      console.log("Details:", reportDetails);
+
+      // Update the comment to mark it as reported
+      setComments((prev) =>
+        prev.map((comment) =>
+          comment.id === reportingUser.id
+            ? { ...comment, reported: true }
+            : comment
+        )
+      );
+
+      // Close dialog and reset state
+      setIsReportDialogOpen(false);
+      setReportingUser(null);
+      setReportReasons([]);
+      setReportDetails("");
+    }
+  };
+
+  const reportReasonsList = [
+    "Spam hoặc quảng cáo",
+    "Ngôn từ thù địch hoặc quấy rối",
+    "Nội dung không phù hợp",
+    "Thông tin sai lệch",
+    "Vi phạm bản quyền",
+    "Nội dung bạo lực",
+    "Lừa đảo hoặc gian lận",
+    "Khác",
+  ];
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "approved":
+        return <Check className="w-3 h-3" />;
+      case "pending":
+        return <MessageSquare className="w-3 h-3" />;
+      case "hidden":
+        return <EyeOff className="w-3 h-3" />;
+      default:
+        return null;
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "approved":
+        return "bg-green-500 hover:bg-green-600";
+      case "pending":
+        return "bg-yellow-500 hover:bg-yellow-600";
+      case "hidden":
+        return "bg-gray-500 hover:bg-gray-600";
+      default:
+        return "bg-gray-500 hover:bg-gray-600";
+    }
+  };
 
   return (
     <div>
@@ -262,7 +337,7 @@ export default function CommentsPage() {
       />
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -310,6 +385,19 @@ export default function CommentsPage() {
                 </p>
               </div>
               <EyeOff className="w-8 h-8 text-gray-500" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Bị báo cáo</p>
+                <p className="text-2xl font-bold text-red-600">
+                  {statusCounts.reported}
+                </p>
+              </div>
+              <Flag className="w-8 h-8 text-red-500" />
             </div>
           </CardContent>
         </Card>
@@ -420,7 +508,7 @@ export default function CommentsPage() {
                   <SelectItem value="all">Tất cả trạng thái</SelectItem>
                   <SelectItem value="approved">Đã duyệt</SelectItem>
                   <SelectItem value="pending">Chờ duyệt</SelectItem>
-                  <SelectItem value="hidden">Ẩn</SelectItem>
+                  <SelectItem value="hidden">Đã ẩn</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -508,45 +596,165 @@ export default function CommentsPage() {
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex space-x-2">
-                        <Dialog>
+                        {/* Status Dropdown - Small like other buttons */}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className={`h-9 w-9 p-0 border-2 ${
+                                comment.status === "approved"
+                                  ? "text-green-600 border-green-600 bg-green-50 hover:bg-green-100"
+                                  : comment.status === "pending"
+                                  ? "text-yellow-600 border-yellow-600 bg-yellow-50 hover:bg-yellow-100"
+                                  : "text-gray-600 border-gray-600 bg-gray-50 hover:bg-gray-100"
+                              }`}
+                              title={`Trạng thái: ${
+                                comment.status === "approved"
+                                  ? "Đã duyệt"
+                                  : comment.status === "pending"
+                                  ? "Chờ duyệt"
+                                  : "Đã ẩn"
+                              }`}
+                            >
+                              {getStatusIcon(comment.status)}
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start">
+                            <DropdownMenuItem
+                              onClick={() =>
+                                handleStatusChange(comment.id, "approved")
+                              }
+                              className="text-green-600 hover:bg-green-50"
+                            >
+                              <Check className="w-4 h-4 mr-2" />
+                              Đã duyệt
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() =>
+                                handleStatusChange(comment.id, "pending")
+                              }
+                              className="text-yellow-600 hover:bg-yellow-50"
+                            >
+                              <MessageSquare className="w-4 h-4 mr-2" />
+                              Chờ duyệt
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() =>
+                                handleStatusChange(comment.id, "hidden")
+                              }
+                              className="text-gray-600 hover:bg-gray-50"
+                            >
+                              <EyeOff className="w-4 h-4 mr-2" />
+                              Đã ẩn
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+
+                        <Dialog
+                          open={isReportDialogOpen}
+                          onOpenChange={setIsReportDialogOpen}
+                        >
                           <DialogTrigger asChild>
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => handleEditComment(comment)}
+                              onClick={() => handleOpenReportDialog(comment)}
+                              className={
+                                comment.reported
+                                  ? "text-red-600 border-red-600 bg-red-50 h-9 w-9 p-0"
+                                  : "text-orange-600 border-orange-600 hover:bg-orange-50 h-9 w-9 p-0"
+                              }
+                              disabled={comment.reported}
+                              title="Báo cáo người dùng"
                             >
-                              <Edit className="w-4 h-4" />
+                              <Flag className="w-4 h-4" />
                             </Button>
                           </DialogTrigger>
-                          <DialogContent>
+                          <DialogContent className="max-w-md">
                             <DialogHeader>
-                              <DialogTitle>Chỉnh sửa bình luận</DialogTitle>
+                              <DialogTitle>Báo cáo người dùng</DialogTitle>
                               <DialogDescription>
-                                Chỉnh sửa nội dung bình luận của {comment.user}
+                                Báo cáo người dùng:{" "}
+                                <strong>{reportingUser?.user}</strong>
+                                <br />
+                                Vui lòng chọn lý do báo cáo và cung cấp thêm
+                                thông tin chi tiết.
                               </DialogDescription>
                             </DialogHeader>
+
                             <div className="space-y-4">
                               <div>
-                                <Label>Nội dung bình luận</Label>
+                                <Label className="text-sm font-medium text-gray-700 mb-3 block">
+                                  Lý do báo cáo *
+                                </Label>
+                                <div className="space-y-2 max-h-48 overflow-y-auto">
+                                  {reportReasonsList.map((reason) => (
+                                    <div
+                                      key={reason}
+                                      className="flex items-center space-x-2"
+                                    >
+                                      <Checkbox
+                                        id={reason}
+                                        checked={reportReasons.includes(reason)}
+                                        onCheckedChange={(checked) =>
+                                          handleReportReasonChange(
+                                            reason,
+                                            checked as boolean
+                                          )
+                                        }
+                                      />
+                                      <Label
+                                        htmlFor={reason}
+                                        className="text-sm text-gray-700 cursor-pointer"
+                                      >
+                                        {reason}
+                                      </Label>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+
+                              <div>
+                                <Label
+                                  htmlFor="report-details"
+                                  className="text-sm font-medium text-gray-700 mb-2 block"
+                                >
+                                  Chi tiết bổ sung (tùy chọn)
+                                </Label>
                                 <Textarea
-                                  value={editContent}
+                                  id="report-details"
+                                  placeholder="Mô tả chi tiết về vấn đề bạn gặp phải..."
+                                  value={reportDetails}
                                   onChange={(e) =>
-                                    setEditContent(e.target.value)
+                                    setReportDetails(e.target.value)
                                   }
-                                  placeholder="Nhập nội dung bình luận..."
-                                  rows={4}
+                                  rows={3}
+                                  className="resize-none"
                                 />
                               </div>
+
+                              <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
+                                <p className="text-sm text-yellow-800">
+                                  <strong>Lưu ý:</strong> Báo cáo sai lệch có
+                                  thể dẫn đến việc tài khoản của bạn bị hạn chế.
+                                </p>
+                              </div>
                             </div>
-                            <DialogFooter>
+
+                            <DialogFooter className="flex space-x-2">
                               <Button
                                 variant="outline"
-                                onClick={() => setEditingComment(null)}
+                                onClick={() => setIsReportDialogOpen(false)}
                               >
                                 Hủy
                               </Button>
-                              <Button onClick={handleSaveEdit}>
-                                Lưu thay đổi
+                              <Button
+                                onClick={handleSubmitReport}
+                                disabled={reportReasons.length === 0}
+                                className="bg-red-600 hover:bg-red-700 text-white"
+                              >
+                                Gửi báo cáo
                               </Button>
                             </DialogFooter>
                           </DialogContent>
@@ -557,7 +765,8 @@ export default function CommentsPage() {
                             <Button
                               size="sm"
                               variant="outline"
-                              className="text-red-600 border-red-600 hover:bg-red-50"
+                              className="text-red-600 border-red-600 hover:bg-red-50 h-9 w-9 p-0"
+                              title="Xóa bình luận"
                             >
                               <Trash2 className="w-4 h-4" />
                             </Button>
@@ -581,30 +790,6 @@ export default function CommentsPage() {
                             </AlertDialogFooter>
                           </AlertDialogContent>
                         </AlertDialog>
-
-                        {comment.status === "hidden" ||
-                        comment.status === "pending" ? (
-                          <Button
-                            size="sm"
-                            onClick={() =>
-                              handleStatusChange(comment.id, "approved")
-                            }
-                            className="bg-green-500 hover:bg-green-600"
-                          >
-                            <Check className="w-4 h-4" />
-                          </Button>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() =>
-                              handleStatusChange(comment.id, "hidden")
-                            }
-                            className="text-gray-600 border-gray-600 hover:bg-gray-50"
-                          >
-                            <EyeOff className="w-4 h-4" />
-                          </Button>
-                        )}
                       </div>
                     </td>
                   </tr>
