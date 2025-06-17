@@ -6,6 +6,11 @@ interface RecipeStatsCardsProps {
   recipes: Recipe[]
 }
 
+// Helper function để format số nhất quán
+function formatNumber(num: number): string {
+  return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+}
+
 export function RecipeStatsCards({ recipes }: RecipeStatsCardsProps) {
   const stats = {
     total: recipes.length,
@@ -61,12 +66,13 @@ export function RecipeStatsCards({ recipes }: RecipeStatsCardsProps) {
           </div>
         </CardContent>
       </Card>
+
       <Card>
         <CardContent className="p-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Tổng lượt xem</p>
-              <p className="text-2xl font-bold text-indigo-600">{stats.totalViews.toLocaleString()}</p>
+              <p className="text-2xl font-bold text-indigo-600">{formatNumber(stats.totalViews)}</p>
             </div>
             <div className="p-2 bg-indigo-100 rounded-full">
               <TrendingUp className="w-6 h-6 text-indigo-600" />
