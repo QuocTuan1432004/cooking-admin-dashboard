@@ -4,10 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import {
-  Search,
-  Bell,
-} from "lucide-react";
+import { Search, Bell } from "lucide-react";
 import Link from "next/link";
 
 interface HeaderProps {
@@ -73,16 +70,14 @@ export function Header({
           <div className="flex items-center space-x-2">
             <Avatar className="w-8 h-8">
               <AvatarImage
-                src={userAvatar || "/placeholder.svg"}
+                src={userAvatar || "LogoNoImage.png"}
                 alt={userName}
               />
               <AvatarFallback className="bg-orange-500 text-white text-sm">
                 {getUserInitials(userName)}
               </AvatarFallback>
             </Avatar>
-            <span className="font-medium text-gray-700">
-              {userName}
-            </span>
+            <span className="font-medium text-gray-700">{userName}</span>
           </div>
         </div>
       </div>
