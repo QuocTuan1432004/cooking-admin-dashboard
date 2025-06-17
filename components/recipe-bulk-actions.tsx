@@ -77,8 +77,11 @@ export function RecipeBulkActions({
         <div className="flex items-center space-x-4">
           <Checkbox
             checked={isAllSelected}
+        
             ref={(el) => {
-              if (el) el.indeterminate = isPartiallySelected;
+              if (el && "indeterminate" in el) {
+                (el as HTMLInputElement).indeterminate = isPartiallySelected;
+              }
             }}
             onCheckedChange={handleSelectAll}
           />

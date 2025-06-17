@@ -1,37 +1,34 @@
-"use client";
+"use client"
 
-import { useState, useMemo } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
-import type { Recipe } from "./recipe-detail-modal";
-import { RecipeTableEnhanced } from "./recipe-table-enhanced";
-import { RecipeDetailModal } from "./recipe-detail-modal";
-import { RecipeFilters } from "./recipe-filters";
-import { RecipeEditModalImproved } from "./recipe-edit-modal-improved";
-import { RecipeStatsCards } from "./recipe-stats-cards";
-import { RecipeBulkActions } from "./recipe-bulk-actions";
-import { RecipePagination } from "./recipe-pagination";
+import { useState, useMemo } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Plus, Carrot } from "lucide-react"
+import type { Recipe } from "./recipe-detail-modal"
+import { RecipeTableEnhanced } from "./recipe-table-enhanced"
+import { RecipeDetailModal } from "./recipe-detail-modal"
+import { RecipeFilters } from "./recipe-filters"
+import { RecipeEditModalImproved } from "./recipe-edit-modal-improved"
+import { RecipeStatsCards } from "./recipe-stats-cards"
+import { RecipeBulkActions } from "./recipe-bulk-actions"
+import { RecipePagination } from "./recipe-pagination"
+import { IngredientAddModal, type Ingredient } from "./ingredient-add-modal"
 
 interface RecipeManagementAdvancedProps {
-  recipes: Recipe[];
-  onRecipeUpdate: (recipes: Recipe[]) => void;
-  showApprovalActions?: boolean;
-  showRating?: boolean;
-  showViews?: boolean;
-  showFilters?: boolean;
-  showStats?: boolean;
-  showBulkActions?: boolean;
-  title?: string;
-  onAddRecipe?: () => void;
+  recipes: Recipe[]
+  onRecipeUpdate: (recipes: Recipe[]) => void
+  showApprovalActions?: boolean
+  showFilters?: boolean
+  showStats?: boolean
+  showBulkActions?: boolean
+  title?: string
+  onAddRecipe?: () => void
 }
 
 export function RecipeManagementAdvanced({
   recipes,
   onRecipeUpdate,
   showApprovalActions = false,
-  showRating = false,
-  showViews = false,
   showFilters = true,
   showStats = false,
   showBulkActions = false,
@@ -39,139 +36,135 @@ export function RecipeManagementAdvanced({
   onAddRecipe,
 }: RecipeManagementAdvancedProps) {
   // Filter states
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("all");
-  const [selectedStatus, setSelectedStatus] = useState("all");
-  const [selectedDate, setSelectedDate] = useState("");
+  const [searchTerm, setSearchTerm] = useState("")
+  const [selectedCategory, setSelectedCategory] = useState("all")
+  const [selectedStatus, setSelectedStatus] = useState("all")
+  const [selectedDate, setSelectedDate] = useState("")
 
   // Modal states
-  const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
-  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null)
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [isIngredientModalOpen, setIsIngredientModalOpen] = useState(false)
 
   // Bulk actions
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [selectedIds, setSelectedIds] = useState<number[]>([])
 
   // Pagination
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+
+  // Ingredients state
+  const [ingredients, setIngredients] = useState<Ingredient[]>([
+    { id: 1, name: "Thịt heo", calories: 250 },
+    { id: 2, name: "Cà chua", calories: 18 },
+    { id: 3, name: "Hành tây", calories: 40 },
+    { id: 4, name: "Gạo tẻ", calories: 365 },
+    { id: 5, name: "Dầu ăn", calories: 884 },
+    { id: 6, name: "Gà ta", calories: 239 },
+    { id: 7, name: "Gừng tươi", calories: 80 },
+    { id: 8, name: "Nước mắm", calories: 10 },
+    { id: 9, name: "Đường trắng", calories: 387 },
+    { id: 10, name: "Tiêu đen", calories: 251 },
+  ])
 
   // Filter recipes
   const filteredRecipes = useMemo(() => {
     return recipes.filter((recipe) => {
       const matchesSearch =
         recipe.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        recipe.author.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesCategory =
-        selectedCategory === "all" || recipe.category === selectedCategory;
-      const matchesStatus =
-        selectedStatus === "all" || recipe.status === selectedStatus;
-      const matchesDate = !selectedDate || recipe.date.includes(selectedDate);
+        recipe.author.toLowerCase().includes(searchTerm.toLowerCase())
+      const matchesCategory = selectedCategory === "all" || recipe.category === selectedCategory
+      const matchesStatus = selectedStatus === "all" || recipe.status === selectedStatus
+      const matchesDate = !selectedDate || recipe.date.includes(selectedDate)
 
-      return matchesSearch && matchesCategory && matchesStatus && matchesDate;
-    });
-  }, [recipes, searchTerm, selectedCategory, selectedStatus, selectedDate]);
+      return matchesSearch && matchesCategory && matchesStatus && matchesDate
+    })
+  }, [recipes, searchTerm, selectedCategory, selectedStatus, selectedDate])
 
   // Paginate recipes
   const paginatedRecipes = useMemo(() => {
-    const startIndex = (currentPage - 1) * pageSize;
-    return filteredRecipes.slice(startIndex, startIndex + pageSize);
-  }, [filteredRecipes, currentPage, pageSize]);
+    const startIndex = (currentPage - 1) * pageSize
+    return filteredRecipes.slice(startIndex, startIndex + pageSize)
+  }, [filteredRecipes, currentPage, pageSize])
 
-  const totalPages = Math.ceil(filteredRecipes.length / pageSize);
+  const totalPages = Math.ceil(filteredRecipes.length / pageSize)
 
   // Reset pagination when filters change
   const handleFilterChange = () => {
-    setCurrentPage(1);
-    setSelectedIds([]);
-  };
+    setCurrentPage(1)
+    setSelectedIds([])
+  }
 
   const handleViewRecipe = (recipe: Recipe) => {
-    setSelectedRecipe(recipe);
-    setIsDetailModalOpen(true);
-  };
+    setSelectedRecipe(recipe)
+    setIsDetailModalOpen(true)
+  }
 
   const handleEditRecipe = (recipe: Recipe) => {
-    setSelectedRecipe(recipe);
-    setIsEditModalOpen(true);
-  };
+    setSelectedRecipe(recipe)
+    setIsEditModalOpen(true)
+  }
 
   const handleSaveRecipe = (updatedRecipe: Recipe) => {
-    const updatedRecipes = recipes.map((recipe) =>
-      recipe.id === updatedRecipe.id ? updatedRecipe : recipe
-    );
-    onRecipeUpdate(updatedRecipes);
-  };
+    const updatedRecipes = recipes.map((recipe) => (recipe.id === updatedRecipe.id ? updatedRecipe : recipe))
+    onRecipeUpdate(updatedRecipes)
+  }
 
   const handleDeleteRecipe = (recipeId: number) => {
-    const updatedRecipes = recipes.filter((recipe) => recipe.id !== recipeId);
-    onRecipeUpdate(updatedRecipes);
-    setSelectedIds(selectedIds.filter((id) => id !== recipeId));
-  };
+    const updatedRecipes = recipes.filter((recipe) => recipe.id !== recipeId)
+    onRecipeUpdate(updatedRecipes)
+    setSelectedIds(selectedIds.filter((id) => id !== recipeId))
+  }
 
   const handleApproveRecipe = (recipeId: number) => {
     const updatedRecipes = recipes.map((recipe) =>
-      recipe.id === recipeId
-        ? { ...recipe, status: "approved" as const }
-        : recipe
-    );
-    onRecipeUpdate(updatedRecipes);
-  };
+      recipe.id === recipeId ? { ...recipe, status: "approved" as const } : recipe,
+    )
+    onRecipeUpdate(updatedRecipes)
+  }
 
   const handleRejectRecipe = (recipeId: number, reason: string) => {
     const updatedRecipes = recipes.map((recipe) =>
-      recipe.id === recipeId
-        ? { ...recipe, status: "rejected" as const }
-        : recipe
-    );
-    onRecipeUpdate(updatedRecipes);
-  };
-
-  const handleToggleFeatured = (recipeId: number) => {
-    const updatedRecipes = recipes.map((recipe) =>
-      recipe.id === recipeId
-        ? { ...recipe, featured: !recipe.featured }
-        : recipe
-    );
-    onRecipeUpdate(updatedRecipes);
-  };
+      recipe.id === recipeId ? { ...recipe, status: "rejected" as const } : recipe,
+    )
+    onRecipeUpdate(updatedRecipes)
+  }
 
   const handleBulkAction = (action: string, ids: number[]) => {
-    let updatedRecipes = [...recipes];
+    let updatedRecipes = [...recipes]
 
     switch (action) {
       case "delete":
-        updatedRecipes = recipes.filter((recipe) => !ids.includes(recipe.id));
-        break;
+        updatedRecipes = recipes.filter((recipe) => !ids.includes(recipe.id))
+        break
       case "approve":
         updatedRecipes = recipes.map((recipe) =>
-          ids.includes(recipe.id)
-            ? { ...recipe, status: "approved" as const }
-            : recipe
-        );
-        break;
+          ids.includes(recipe.id) ? { ...recipe, status: "approved" as const } : recipe,
+        )
+        break
       case "reject":
         updatedRecipes = recipes.map((recipe) =>
-          ids.includes(recipe.id)
-            ? { ...recipe, status: "rejected" as const }
-            : recipe
-        );
-        break;
-      case "feature":
-        updatedRecipes = recipes.map((recipe) =>
-          ids.includes(recipe.id)
-            ? { ...recipe, featured: !recipe.featured }
-            : recipe
-        );
-        break;
+          ids.includes(recipe.id) ? { ...recipe, status: "rejected" as const } : recipe,
+        )
+        break
     }
 
-    onRecipeUpdate(updatedRecipes);
-  };
+    onRecipeUpdate(updatedRecipes)
+  }
+
+  const handleAddIngredient = (newIngredient: Omit<Ingredient, "id">) => {
+    const ingredient: Ingredient = {
+      ...newIngredient,
+      id: Math.max(...ingredients.map((i) => i.id), 0) + 1,
+    }
+    setIngredients([...ingredients, ingredient])
+    console.log("Đã thêm nguyên liệu:", ingredient)
+  }
 
   const getUniqueCategories = () => {
-    return [...new Set(recipes.map((recipe) => recipe.category))];
-  };
+    return [...new Set(recipes.map((recipe) => recipe.category))]
+  }
 
   return (
     <>
@@ -181,15 +174,18 @@ export function RecipeManagementAdvanced({
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <span>{title}</span>
-            {onAddRecipe && (
-              <Button
-                className="bg-orange-500 hover:bg-orange-600"
-                onClick={onAddRecipe}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Thêm công thức
+            <div className="flex gap-2">
+              {onAddRecipe && (
+                <Button className="bg-orange-500 hover:bg-orange-600" onClick={onAddRecipe}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Thêm công thức
+                </Button>
+              )}
+              <Button className="bg-green-500 hover:bg-green-600" onClick={() => setIsIngredientModalOpen(true)}>
+                <Carrot className="w-4 h-4 mr-2" />
+                Thêm nguyên liệu
               </Button>
-            )}
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -223,12 +219,6 @@ export function RecipeManagementAdvanced({
             onView={handleViewRecipe}
             onEdit={handleEditRecipe}
             onDelete={handleDeleteRecipe}
-            onApprove={handleApproveRecipe}
-            onReject={handleRejectRecipe}
-            onToggleFeatured={handleToggleFeatured}
-            showApprovalActions={showApprovalActions}
-            showRating={showRating}
-            showViews={showViews}
             selectedIds={showBulkActions ? selectedIds : undefined}
             onSelectionChange={showBulkActions ? setSelectedIds : undefined}
           />
@@ -240,8 +230,8 @@ export function RecipeManagementAdvanced({
             totalItems={filteredRecipes.length}
             onPageChange={setCurrentPage}
             onPageSizeChange={(size) => {
-              setPageSize(size);
-              setCurrentPage(1);
+              setPageSize(size)
+              setCurrentPage(1)
             }}
           />
         </CardContent>
@@ -252,20 +242,30 @@ export function RecipeManagementAdvanced({
         recipe={selectedRecipe}
         isOpen={isDetailModalOpen}
         onClose={() => {
-          setIsDetailModalOpen(false);
-          setSelectedRecipe(null);
+          setIsDetailModalOpen(false)
+          setSelectedRecipe(null)
         }}
+        onApprove={handleApproveRecipe}
+        onReject={handleRejectRecipe}
+        showApprovalActions={showApprovalActions}
       />
 
       <RecipeEditModalImproved
         recipe={selectedRecipe}
         isOpen={isEditModalOpen}
         onClose={() => {
-          setIsEditModalOpen(false);
-          setSelectedRecipe(null);
+          setIsEditModalOpen(false)
+          setSelectedRecipe(null)
         }}
         onSave={handleSaveRecipe}
+        ingredients={ingredients}
+      />
+
+      <IngredientAddModal
+        isOpen={isIngredientModalOpen}
+        onClose={() => setIsIngredientModalOpen(false)}
+        onSave={handleAddIngredient}
       />
     </>
-  );
+  )
 }

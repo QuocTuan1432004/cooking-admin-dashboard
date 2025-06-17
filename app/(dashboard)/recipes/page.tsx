@@ -1,14 +1,14 @@
-"use client";
+"use client"
 
-import { useState } from "react";
-import { Header } from "@/components/ui/header";
-import { useRouter } from "next/navigation";
-import type { Recipe } from "@/components/recipe-detail-modal";
-import { RecipeManagementAdvanced } from "@/components/recipe-management-advanced";
+import { useState } from "react"
+import { Header } from "@/components/ui/header"
+import { useRouter } from "next/navigation"
+import type { Recipe } from "@/components/recipe-detail-modal"
+import { RecipeManagementAdvanced } from "@/components/recipe-management-advanced"
 
 export default function RecipesPage() {
-  const router = useRouter();
-  const [unreadNotifications] = useState(3);
+  const router = useRouter()
+  const [unreadNotifications] = useState(3)
 
   const [recipes, setRecipes] = useState<Recipe[]>([
     {
@@ -21,9 +21,7 @@ export default function RecipesPage() {
       status: "approved",
       rating: 4.5,
       views: 1250,
-      featured: true,
-      description:
-        "Món gà kho gừng thơm ngon, đậm đà hương vị truyền thống Việt Nam",
+      description: "Món gà kho gừng thơm ngon, đậm đà hương vị truyền thống Việt Nam",
       ingredients: [
         "1 con gà ta (khoảng 1.5kg)",
         "100g gừng tươi",
@@ -54,7 +52,6 @@ export default function RecipesPage() {
       status: "approved",
       rating: 4.2,
       views: 980,
-      featured: false,
       description: "Canh chua cá bông lau thanh mát, chua ngọt đậm đà",
       ingredients: [
         "500g cá bông lau",
@@ -74,7 +71,6 @@ export default function RecipesPage() {
       cookingTime: "30 phút",
       servings: 3,
     },
-    // ... thêm nhiều recipes khác để test pagination
     {
       id: 3,
       name: "Bánh flan",
@@ -85,14 +81,8 @@ export default function RecipesPage() {
       status: "approved",
       rating: 4.8,
       views: 1500,
-      featured: true,
       description: "Bánh flan mềm mịn, thơm ngon với lớp caramel đậm đà",
-      ingredients: [
-        "4 quả trứng gà",
-        "400ml sữa tươi",
-        "80g đường",
-        "1 tsp vanilla",
-      ],
+      ingredients: ["4 quả trứng gà", "400ml sữa tươi", "80g đường", "1 tsp vanilla"],
       instructions: [
         "Làm caramel với đường",
         "Đánh trứng với sữa",
@@ -113,7 +103,6 @@ export default function RecipesPage() {
       status: "pending",
       rating: 0,
       views: 0,
-      featured: false,
       description: "Chè đậu xanh mát lành, bổ dưỡng",
       ingredients: ["200g đậu xanh", "100g đường", "400ml nước cốt dừa"],
       instructions: ["Nấu đậu xanh", "Thêm đường", "Chan nước cốt dừa"],
@@ -130,20 +119,19 @@ export default function RecipesPage() {
       status: "rejected",
       rating: 0,
       views: 0,
-      featured: false,
       description: "Rau muống xào tỏi giòn ngon, đơn giản",
       ingredients: ["500g rau muống", "3 tép tỏi", "Nước mắm, dầu ăn"],
       instructions: ["Nhặt rau muống", "Phi tỏi", "Xào rau nhanh tay"],
       cookingTime: "10 phút",
       servings: 2,
     },
-  ]);
+  ])
 
   const handleLogout = () => {
-    console.log("Đăng xuất thành công");
-    localStorage.removeItem("auth_token");
-    router.push("/login");
-  };
+    console.log("Đăng xuất thành công")
+    localStorage.removeItem("auth_token")
+    router.push("/login")
+  }
 
   return (
     <div>
@@ -159,8 +147,8 @@ export default function RecipesPage() {
         recipes={recipes}
         onRecipeUpdate={setRecipes}
         showApprovalActions={true}
-        showRating={true}
-        showViews={true}
+        // showRating={true}
+        // showViews={true}
         showFilters={true}
         showStats={true}
         showBulkActions={true}
@@ -168,5 +156,5 @@ export default function RecipesPage() {
         onAddRecipe={() => router.push("/recipes/create")}
       />
     </div>
-  );
+  )
 }
