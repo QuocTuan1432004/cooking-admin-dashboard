@@ -9,9 +9,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Upload, Save, ArrowLeft, Clock, ChefHat, ImageIcon, X, Search } from "lucide-react"
+import { Upload, Save, ArrowLeft, Clock, ChefHat, ImageIcon, X, Search, Plus, Edit, Trash2 } from "lucide-react"
 import Image from "next/image"
 import { IngredientSelectModal } from "@/components/ingredient-select-modal"
+import { InstructionAddModal, type Instruction } from "@/components/instruction-add-modal"
 import type { Ingredient } from "@/components/ingredient-add-modal"
 
 interface Category {
@@ -38,6 +39,9 @@ export default function CreateRecipePage() {
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [dragActive, setDragActive] = useState(false)
   const [isIngredientSelectOpen, setIsIngredientSelectOpen] = useState(false)
+  const [isInstructionModalOpen, setIsInstructionModalOpen] = useState(false)
+  const [editingInstructionIndex, setEditingInstructionIndex] = useState<number | null>(null)
+  const [detailedInstructions, setDetailedInstructions] = useState<Instruction[]>([])
 
   // Sample ingredients data
   const [ingredients] = useState<Ingredient[]>([
@@ -105,7 +109,7 @@ export default function CreateRecipePage() {
     parentCategory: "",
     subCategory: "",
     ingredients: [],
-    instructions: [""],
+    instructions: [],
   })
 
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -183,25 +187,40 @@ export default function CreateRecipePage() {
     }))
   }
 
-  const addInstruction = () => {
-    setRecipe((prev) => ({
-      ...prev,
-      instructions: [...prev.instructions, ""],
-    }))
+  const handleAddInstruction = () => {
+    setEditingInstructionIndex(null)
+    setIsInstructionModalOpen(true)
+  }
+
+  const handleEditInstruction = (index: number) => {
+    setEditingInstructionIndex(index)
+    setIsInstructionModalOpen(true)
+  }
+
+  const handleSaveInstruction = (instructionData: Omit<Instruction, "step">) => {
+    if (editingInstructionIndex !== null) {
+      // Edit existing instruction
+      const newInstructions = [...detailedInstructions]
+      newInstructions[editingInstructionIndex] = {
+        ...instructionData,
+        step: editingInstructionIndex + 1,
+      }
+      setDetailedInstructions(newInstructions)
+    } else {
+      // Add new instruction
+      const newInstruction: Instruction = {
+        ...instructionData,
+        step: detailedInstructions.length + 1,
+      }
+      setDetailedInstructions([...detailedInstructions, newInstruction])
+    }
   }
 
   const removeInstruction = (index: number) => {
-    setRecipe((prev) => ({
-      ...prev,
-      instructions: prev.instructions.filter((_, i) => i !== index),
-    }))
-  }
-
-  const updateInstruction = (index: number, value: string) => {
-    setRecipe((prev) => ({
-      ...prev,
-      instructions: prev.instructions.map((instruction, i) => (i === index ? value : instruction)),
-    }))
+    const newInstructions = detailedInstructions.filter((_, i) => i !== index)
+    // Re-number steps
+    const renumbered = newInstructions.map((inst, i) => ({ ...inst, step: i + 1 }))
+    setDetailedInstructions(renumbered)
   }
 
   const validateForm = () => {
@@ -218,8 +237,9 @@ export default function CreateRecipePage() {
     const validIngredients = recipe.ingredients.filter((ing) => ing.trim())
     if (validIngredients.length === 0) newErrors.ingredients = "Ít nhất một nguyên liệu là bắt buộc"
 
-    const validInstructions = recipe.instructions.filter((inst) => inst.trim())
-    if (validInstructions.length === 0) newErrors.instructions = "Ít nhất một bước làm là bắt buộc"
+    if (detailedInstructions.length === 0 || !detailedInstructions.some((inst) => inst.description.trim())) {
+      newErrors.instructions = "Ít nhất một bước làm là bắt buộc"
+    }
 
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
@@ -233,6 +253,16 @@ export default function CreateRecipePage() {
     }
 
     setIsLoading(true)
+
+    // Convert detailed instructions to simple strings for compatibility
+    const simpleInstructions = detailedInstructions
+      .filter((inst) => inst.description.trim())
+      .map((inst) => inst.description)
+
+    const finalRecipe = {
+      ...recipe,
+      instructions: simpleInstructions,
+    }
 
     // Simulate API call
     setTimeout(() => {
@@ -532,40 +562,72 @@ export default function CreateRecipePage() {
             {/* Instructions */}
             <Card>
               <CardHeader>
-                <CardTitle>Cách làm</CardTitle>
+                <CardTitle className="flex items-center justify-between">
+                  <span>Cách làm</span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleAddInstruction}
+                    className="bg-orange-500 hover:bg-orange-600"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Thêm bước
+                  </Button>
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  {recipe.instructions.map((instruction, index) => (
-                    <div key={index} className="flex items-start space-x-2">
-                      <div className="flex-shrink-0 w-8 h-8 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center text-sm font-medium mt-1">
-                        {index + 1}
+                <div className="space-y-4">
+                  {detailedInstructions.map((instruction, index) => (
+                    <div key={index} className="border rounded-lg p-4 bg-gray-50">
+                      <div className="flex items-start gap-4">
+                        <div className="flex-shrink-0 w-8 h-8 bg-orange-500 text-white rounded-full flex items-center justify-center font-semibold">
+                          {instruction.step}
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <h4 className="font-medium">Bước {instruction.step}</h4>
+                            {instruction.time && (
+                              <div className="flex items-center gap-1 text-sm text-gray-600">
+                                <Clock className="w-3 h-3" />
+                                <span>{instruction.time}</span>
+                              </div>
+                            )}
+                          </div>
+                          <p className="text-gray-700 mb-2">{instruction.description}</p>
+                          {instruction.image && (
+                            <Image
+                              src={instruction.image || "/placeholder.svg"}
+                              alt={`Bước ${instruction.step}`}
+                              width={150}
+                              height={100}
+                              className="rounded object-cover"
+                            />
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleEditInstruction(index)}
+                            className="text-blue-600 hover:bg-blue-50"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => removeInstruction(index)}
+                            className="text-red-600 hover:bg-red-50"
+                            disabled={detailedInstructions.length === 1}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </div>
-                      <div className="flex-1">
-                        <textarea
-                          value={instruction}
-                          onChange={(e) => updateInstruction(index, e.target.value)}
-                          placeholder={`Bước ${index + 1}...`}
-                          rows={3}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
-                        />
-                      </div>
-                      {recipe.instructions.length > 1 && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => removeInstruction(index)}
-                          className="text-red-600 border-red-600 hover:bg-red-50 mt-1"
-                        >
-                          <X className="w-4 h-4" />
-                        </Button>
-                      )}
                     </div>
                   ))}
-                  <Button type="button" variant="outline" onClick={addInstruction} className="w-full">
-                    + Thêm bước làm
-                  </Button>
                   {errors.instructions && <p className="text-red-500 text-sm">{errors.instructions}</p>}
                 </div>
               </CardContent>
@@ -591,6 +653,17 @@ export default function CreateRecipePage() {
         onClose={() => setIsIngredientSelectOpen(false)}
         onSelect={addIngredientFromSelect}
         ingredients={ingredients}
+      />
+
+      {/* Instruction Add Modal */}
+      <InstructionAddModal
+        isOpen={isInstructionModalOpen}
+        onClose={() => setIsInstructionModalOpen(false)}
+        onSave={handleSaveInstruction}
+        stepNumber={editingInstructionIndex !== null ? editingInstructionIndex + 1 : detailedInstructions.length + 1}
+        editingInstruction={
+          editingInstructionIndex !== null ? detailedInstructions[editingInstructionIndex] : undefined
+        }
       />
     </>
   )
