@@ -16,12 +16,15 @@ export interface CommentResponse {
 
 interface Page<T> {
   content: T[];
-  totalElements: number;
-  totalPages: number;
-  size: number;
-  number: number;
-  first: boolean;
-  last: boolean;
+  totalElements: number; // Tổng số bình luận
+  totalPages: number; // Tổng số trang
+  size: number; // Số lượng phần tử trên mỗi trang
+  number: number; // Số trang hiện tại (bắt đầu từ 0)
+  first: boolean; // Có phải trang đầu tiên không
+  last: boolean; // Có phải trang cuối cùng không
+  totalApproved?: number; // Tổng số bình luận đã duyệt (nếu API trả về)
+  totalPending?: number; // Tổng số bình luận chờ duyệt (nếu API trả về)
+  totalHidden?: number; // Tổng số bình luận đã ẩn (nếu API trả về)
 }
 
 // GET /comments/recipe/{recipeId} - Lấy danh sách comment theo Recipe ID

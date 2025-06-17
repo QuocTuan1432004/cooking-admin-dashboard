@@ -6,12 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { 
-    getAllComments, 
-    deleteComment, 
-    CommentResponse, 
+import {
+    getAllComments,
+    deleteComment,
+    CommentResponse,
     updateCommentStatus,
-} from "../../../hooks/commentApi/commentApi"; // Đảm bảo đường dẫn đúng
+} from "../../../hooks/commentApi/commentApi";
 import {
     Select,
     SelectContent,
@@ -49,27 +49,27 @@ import {
     Check,
     Filter,
     Search,
+    Clock,
+    X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-// Định nghĩa Comment phù hợp với cách bạn map từ CommentResponse
 interface Comment {
     id: string;
-    user: string; // Map từ username
-    recipe: string; // Map từ recipeTitle
-    content: string; // Map từ commentText
-    date: string; // Đã được định dạng YYYY-MM-DD
+    user: string;
+    recipe: string;
+    content: string;
+    date: string;
     status: "APPROVED" | "HIDDEN" | "PENDING";
-    avatar?: string; // Giữ lại nếu có
+    avatar?: string;
 }
 
-// Hàm trợ giúp để định dạng ngày thành YYYY-MM-DD
 const formatDateToYYYYMMDD = (isoString: string): string => {
     if (!isoString) return "";
     try {
         const date = new Date(isoString);
         const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0'); // Tháng bắt đầu từ 0
+        const month = String(date.getMonth() + 1).padStart(2, '0');
         const day = String(date.getDate()).padStart(2, '0');
         return `${year}-${month}-${day}`;
     } catch (e) {
@@ -83,13 +83,29 @@ export default function CommentsPage() {
     const [comments, setComments] = useState<Comment[]>([]);
     const [loading, setLoading] = useState(false);
     const [selectedComments, setSelectedComments] = useState<string[]>([]);
-    const [searchTerm, setSearchTerm] = useState("");
-    const [selectedRecipe, setSelectedRecipe] = useState("all");
-    const [selectedStatus, setSelectedStatus] = useState("all");
-    const [selectedDate, setSelectedDate] = useState("");
+    
+    // Tách biệt các giá trị filter hiện tại và đã áp dụng
+    const [tempSearchTerm, setTempSearchTerm] = useState("");
+    const [tempSelectedRecipe, setTempSelectedRecipe] = useState("all");
+    const [tempSelectedStatus, setTempSelectedStatus] = useState("all");
+    const [tempSelectedDate, setTempSelectedDate] = useState("");
+    
+    // Các giá trị filter được áp dụng
+    const [appliedSearchTerm, setAppliedSearchTerm] = useState("");
+    const [appliedSelectedRecipe, setAppliedSelectedRecipe] = useState("all");
+    const [appliedSelectedStatus, setAppliedSelectedStatus] = useState("all");
+    const [appliedSelectedDate, setAppliedSelectedDate] = useState("");
+    
     const [editingComment, setEditingComment] = useState<Comment | null>(null);
     const [editContent, setEditContent] = useState("");
-    const [isEditDialogOpen, setIsEditDialogOpen] = useState(false); // State để kiểm soát Dialog
+    const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+    const [currentPage, setCurrentPage] = useState(0);
+    const [totalPages, setTotalPages] = useState(0);
+    const size = 10;
+    const [totalComments, setTotalComments] = useState(0);
+    const [approvedCount, setApprovedCount] = useState(0);
+    const [pendingCount, setPendingCount] = useState(0);
+    const [hiddenCount, setHiddenCount] = useState(0);
 
     const handleLogout = () => {
         console.log("Đăng xuất thành công");
@@ -97,40 +113,182 @@ export default function CommentsPage() {
         router.push("/login");
     };
 
-    // Hàm chung để fetch comments
-    const fetchComments = async () => {
-        setLoading(true);
-        try {
-            const response = await getAllComments(0, 10); // Gọi API lấy comments (page = 0, size = 10)
-            console.log("API Response:", response);
+    // Hàm xử lý khi bấm nút Lọc
+    const handleApplyFilter = async () => {
+        // Nếu có bất kỳ filter nào, tải tất cả dữ liệu để tìm kiếm
+        if (tempSearchTerm || tempSelectedRecipe !== "all" || tempSelectedStatus !== "all" || tempSelectedDate) {
+            await fetchAllComments(); // Tải tất cả comments
+        } else {
+            // Nếu không có filter, về phân trang bình thường
+            await fetchCommentsByPage(0);
+        }
+        
+        setAppliedSearchTerm(tempSearchTerm);
+        setAppliedSelectedRecipe(tempSelectedRecipe);
+        setAppliedSelectedStatus(tempSelectedStatus);
+        setAppliedSelectedDate(tempSelectedDate);
+        setCurrentPage(0);
+    };
 
-            if (!response || !response.content || !Array.isArray(response.content)) {
-                console.error("Invalid response format:", response);
-                setComments([]); // Clear comments if format is invalid
-                return;
+    // Hàm xóa bộ lọc
+    const handleClearFilter = async () => {
+        setTempSearchTerm("");
+        setTempSelectedRecipe("all");
+        setTempSelectedStatus("all");
+        setTempSelectedDate("");
+        setAppliedSearchTerm("");
+        setAppliedSelectedRecipe("all");
+        setAppliedSelectedStatus("all");
+        setAppliedSelectedDate("");
+        setCurrentPage(0);
+        
+        // Về lại phân trang bình thường khi xóa filter
+        await fetchCommentsByPage(0);
+    };
+
+    // Kiểm tra xem có filter nào đang được áp dụng không
+    const hasActiveFilters = () => {
+        return appliedSearchTerm !== "" || 
+               appliedSelectedRecipe !== "all" || 
+               appliedSelectedStatus !== "all" || 
+               appliedSelectedDate !== "";
+    };
+
+    const fetchAllComments = async () => {
+        setLoading(true);
+        let page = 0;
+        const size = 10;
+        const allComments: any[] = [];
+
+        try {
+            while (true) {
+                const response = await getAllComments(page, size);
+                console.log(`API Response for page ${page}:`, response);
+
+                if (!response || !response.content || !Array.isArray(response.content) || response.content.length === 0) {
+                    console.log("No more comments to load.");
+                    break;
+                }
+
+                const mappedComments = response.content.map((comment: CommentResponse) => ({
+                    id: comment.id,
+                    user: comment.username || "Unknown User",
+                    recipe: comment.recipeTitle || "Unknown Recipe",
+                    content: comment.commentText || "No content",
+                    date: comment.createdAt ? formatDateToYYYYMMDD(comment.createdAt) : "Unknown Date",
+                    status: comment.status || "PENDING",
+                }));
+
+                allComments.push(...mappedComments);
+                page++;
             }
 
-            const mappedComments = response.content.map((comment: CommentResponse) => ({
-                id: comment.id,
-                user: comment.username || "Unknown User",
-                recipe: comment.recipeTitle || "Unknown Recipe",
-                content: comment.commentText || "No content",
-                date: comment.createdAt ? formatDateToYYYYMMDD(comment.createdAt) : "Unknown Date",
-                status: comment.status || "PENDING",
-            }));
-            setComments(mappedComments);
+            setComments(allComments);
         } catch (error) {
             console.error("Failed to fetch comments:", error);
-            // Optionally, clear comments or show error message to user
+            setComments([]);
         } finally {
             setLoading(false);
         }
     };
 
-    // Gọi API khi component mount
+    const fetchCommentsByPage = async (page: number) => {
+        setLoading(true);
+        try {
+            const response = await getAllComments(page, size);
+            if (response && response.content) {
+                const mappedComments = response.content.map((comment: CommentResponse) => ({
+                    id: comment.id,
+                    user: comment.username || "Unknown User",
+                    recipe: comment.recipeTitle || "Unknown Recipe",
+                    content: comment.commentText || "No content",
+                    date: comment.createdAt ? formatDateToYYYYMMDD(comment.createdAt) : "Unknown Date",
+                    status: comment.status || "PENDING",
+                }));
+                
+                setComments(mappedComments);
+
+                if (page === 0) {
+                    setTotalComments(response.totalElements || 0);
+                    setTotalPages(response.totalPages || 0);
+                    await fetchAllCommentsForStats();
+                }
+            }
+        } catch (error) {
+            console.error("Failed to fetch comments:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const fetchAllCommentsForStats = async () => {
+        try {
+            let allComments: CommentResponse[] = [];
+            let currentPage = 0;
+            let hasMoreData = true;
+
+            while (hasMoreData) {
+                const response = await getAllComments(currentPage, 50);
+                if (response && response.content && response.content.length > 0) {
+                    allComments.push(...response.content);
+                    currentPage++;
+                    hasMoreData = !response.last;
+                } else {
+                    hasMoreData = false;
+                }
+            }
+
+            const approved = allComments.filter(comment => comment.status === 'APPROVED').length;
+            const pending = allComments.filter(comment => comment.status === 'PENDING').length;
+            const hidden = allComments.filter(comment => comment.status === 'HIDDEN').length;
+
+            setApprovedCount(approved);
+            setPendingCount(pending);
+            setHiddenCount(hidden);
+            
+            console.log("Stats calculated:", { approved, pending, hidden });
+        } catch (error) {
+            console.error("Failed to fetch all comments for stats:", error);
+        }
+    };
+
+    const handleNextPage = () => {
+        if (currentPage < totalPages - 1) {
+            setCurrentPage(currentPage + 1);
+        }
+    };
+
+    const handlePreviousPage = () => {
+        if (currentPage > 0) {
+            setCurrentPage(currentPage - 1);
+        }
+    };
+
     useEffect(() => {
-        fetchComments();
-    }, []); // Mảng dependency rỗng để chỉ gọi một lần khi component được mount
+        fetchCommentsByPage(0);
+    }, []);
+
+    useEffect(() => {
+        if (currentPage === 0) {
+            fetchCommentsByPage(0);
+        } else {
+            fetchCommentsByPage(currentPage);
+        }
+    }, [currentPage]);
+
+    const refreshStats = async () => {
+        try {
+            const response = await getAllComments(0, size);
+            if (response) {
+                setTotalComments(response.totalElements || 0);
+                setApprovedCount(response.totalApproved || 0);
+                setPendingCount(response.totalPending || 0);
+                setHiddenCount(response.totalHidden || 0);
+            }
+        } catch (error) {
+            console.error("Failed to refresh stats:", error);
+        }
+    };
 
     const getStatusBadge = (status: string) => {
         switch (status) {
@@ -169,45 +327,82 @@ export default function CommentsPage() {
         }
     };
 
-    // Hàm mới để xử lý cập nhật trạng thái
-    const handleUpdateCommentStatus = async (
-        commentId: string,
-        newStatus: 'APPROVED' | 'HIDDEN' | 'PENDING'
-    ) => {
+    const handleUpdateCommentStatus = async (commentId: string, newStatus: "APPROVED" | "HIDDEN" | "PENDING") => {
         try {
-            const updatedComment = await updateCommentStatus(commentId, newStatus);
-            setComments((prev) =>
-                prev.map((comment) =>
-                    comment.id === updatedComment.id
-                        ? { ...comment, status: updatedComment.status || newStatus } // Sử dụng status từ API hoặc fallback
-                        : comment
-                )
-            );
-            console.log(`Comment ${commentId} status updated to ${newStatus} successfully.`);
+            const currentComment = comments.find(c => c.id === commentId);
+            const oldStatus = currentComment?.status;
+            
+            await updateCommentStatus(commentId, newStatus);
+            
+            if (oldStatus) {
+                switch (oldStatus) {
+                    case "APPROVED":
+                        setApprovedCount(prev => prev - 1);
+                        break;
+                    case "PENDING":
+                        setPendingCount(prev => prev - 1);
+                        break;
+                    case "HIDDEN":
+                        setHiddenCount(prev => prev - 1);
+                        break;
+                }
+            }
+            
+            switch (newStatus) {
+                case "APPROVED":
+                    setApprovedCount(prev => prev + 1);
+                    break;
+                case "PENDING":
+                    setPendingCount(prev => prev + 1);
+                    break;
+                case "HIDDEN":
+                    setHiddenCount(prev => prev + 1);
+                    break;
+            }
+            
+            await fetchCommentsByPage(currentPage);
+            
+            console.log(`Comment status updated to ${newStatus}`);
         } catch (error) {
-            console.error(`Failed to update comment ${commentId} status to ${newStatus}:`, error);
-            alert(`Không thể cập nhật trạng thái bình luận ${commentId}. Vui lòng thử lại.`);
+            console.error("Failed to update comment status:", error);
         }
     };
 
     const handleDeleteComment = async (commentId: string) => {
         try {
             await deleteComment(commentId);
-            setComments((prev) => prev.filter((comment) => comment.id !== commentId));
-            console.log(`Comment with ID ${commentId} deleted successfully.`);
+            
+            const deletedComment = comments.find(c => c.id === commentId);
+            
+            setTotalComments(prev => prev - 1);
+            
+            if (deletedComment) {
+                switch (deletedComment.status) {
+                    case "APPROVED":
+                        setApprovedCount(prev => prev - 1);
+                        break;
+                    case "PENDING":
+                        setPendingCount(prev => prev - 1);
+                        break;
+                    case "HIDDEN":
+                        setHiddenCount(prev => prev - 1);
+                        break;
+                }
+            }
+            
+            await fetchCommentsByPage(currentPage);
+            
+            console.log("Comment deleted successfully");
         } catch (error) {
             console.error("Failed to delete comment:", error);
-            alert("Không thể xóa bình luận. Vui lòng thử lại.");
         }
     };
 
     const handleEditComment = (comment: Comment) => {
         setEditingComment(comment);
         setEditContent(comment.content);
-        setIsEditDialogOpen(true); // Mở dialog chỉnh sửa
+        setIsEditDialogOpen(true);
     };
-
-    
 
     const handleSelectComment = (commentId: string) => {
         setSelectedComments((prev) =>
@@ -226,7 +421,7 @@ export default function CommentsPage() {
     };
 
     const handleBulkAction = async (action: "approve" | "hide" | "delete") => {
-        const operations: Promise<void | CommentResponse>[] = []; // Mảng chứa các Promise của API calls
+        const operations: Promise<void | CommentResponse>[] = [];
         let successCount = 0;
         let failCount = 0;
 
@@ -251,29 +446,28 @@ export default function CommentsPage() {
             }
         }
 
-        await Promise.allSettled(operations); // Chờ tất cả các thao tác hoàn thành
+        await Promise.allSettled(operations);
 
         if (failCount > 0) {
             alert(`Đã hoàn thành hành động hàng loạt với ${successCount} thành công và ${failCount} thất bại. Vui lòng kiểm tra console để biết chi tiết.`);
         } else {
             alert(`Đã hoàn thành hành động hàng loạt cho ${successCount} bình luận.`);
         }
-        
+
         setSelectedComments([]);
-        fetchComments(); // Fetch lại toàn bộ comments để đảm bảo trạng thái hiển thị chính xác
+        fetchAllComments();
     };
 
-
+    // Sử dụng appliedFilters thay vì temp filters cho việc lọc
     const filteredComments = comments.filter((comment) => {
         const matchesSearch =
-            comment.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            comment.user.toLowerCase().includes(searchTerm.toLowerCase());
+            comment.content.toLowerCase().includes(appliedSearchTerm.toLowerCase()) ||
+            comment.user.toLowerCase().includes(appliedSearchTerm.toLowerCase());
         const matchesRecipe =
-            selectedRecipe === "all" || comment.recipe === selectedRecipe;
+            appliedSelectedRecipe === "all" || comment.recipe === appliedSelectedRecipe;
         const matchesStatus =
-            selectedStatus === "all" || comment.status === selectedStatus;
-
-        const matchesDate = !selectedDate || comment.date === selectedDate;
+            appliedSelectedStatus === "all" || comment.status === appliedSelectedStatus;
+        const matchesDate = !appliedSelectedDate || comment.date === appliedSelectedDate;
 
         return matchesSearch && matchesRecipe && matchesStatus && matchesDate;
     });
@@ -308,55 +502,51 @@ export default function CommentsPage() {
                         notificationCount={3}
                     />
 
-                    {/* Statistics Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                         <Card>
-                            <CardContent className="p-4">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="text-sm text-gray-600">Tổng bình luận</p>
-                                        <p className="text-2xl font-bold">{statusCounts.total}</p>
+                            <CardContent className="p-6">
+                                <div className="flex items-center">
+                                    <MessageSquare className="h-8 w-8 text-blue-600" />
+                                    <div className="ml-4">
+                                        <p className="text-sm font-medium text-gray-600">Tổng bình luận</p>
+                                        <p className="text-2xl font-bold">{totalComments}</p>
                                     </div>
-                                    <MessageSquare className="w-8 h-8 text-blue-500" />
                                 </div>
                             </CardContent>
                         </Card>
+
                         <Card>
-                            <CardContent className="p-4">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="text-sm text-gray-600">Đã duyệt</p>
-                                        <p className="text-2xl font-bold text-green-600">
-                                            {statusCounts.approved}
-                                        </p>
+                            <CardContent className="p-6">
+                                <div className="flex items-center">
+                                    <Check className="h-8 w-8 text-green-600" />
+                                    <div className="ml-4">
+                                        <p className="text-sm font-medium text-gray-600">Đã duyệt</p>
+                                        <p className="text-2xl font-bold">{approvedCount}</p>
                                     </div>
-                                    <Check className="w-8 h-8 text-green-500" />
                                 </div>
                             </CardContent>
                         </Card>
+
                         <Card>
-                            <CardContent className="p-4">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="text-sm text-gray-600">Chờ duyệt</p>
-                                        <p className="text-2xl font-bold text-yellow-600">
-                                            {statusCounts.pending}
-                                        </p>
+                            <CardContent className="p-6">
+                                <div className="flex items-center">
+                                    <Clock className="h-8 w-8 text-yellow-600" />
+                                    <div className="ml-4">
+                                        <p className="text-sm font-medium text-gray-600">Chờ duyệt</p>
+                                        <p className="text-2xl font-bold">{pendingCount}</p>
                                     </div>
-                                    <MessageSquare className="w-8 h-8 text-yellow-500" />
                                 </div>
                             </CardContent>
                         </Card>
+
                         <Card>
-                            <CardContent className="p-4">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="text-sm text-gray-600">Đã ẩn</p>
-                                        <p className="text-2xl font-bold text-gray-600">
-                                            {statusCounts.hidden}
-                                        </p>
+                            <CardContent className="p-6">
+                                <div className="flex items-center">
+                                    <EyeOff className="h-8 w-8 text-gray-600" />
+                                    <div className="ml-4">
+                                        <p className="text-sm font-medium text-gray-600">Đã ẩn</p>
+                                        <p className="text-2xl font-bold">{hiddenCount}</p>
                                     </div>
-                                    <EyeOff className="w-8 h-8 text-gray-500" />
                                 </div>
                             </CardContent>
                         </Card>
@@ -380,10 +570,10 @@ export default function CommentsPage() {
                                         <Button
                                             size="sm"
                                             variant="outline"
-                                            onClick={() => handleBulkAction("hide")} // Gọi bulk action "hide"
+                                            onClick={() => handleBulkAction("hide")}
                                             className="text-gray-600 border-gray-600 hover:bg-gray-50"
                                         >
-                                            <EyeOff className="w-4 h-4 mr-1" /> {/* Thêm mr-1 để căn chỉnh icon */}
+                                            <EyeOff className="w-4 h-4 mr-1" />
                                             Ẩn ({selectedComments.length})
                                         </Button>
                                         <AlertDialog>
@@ -431,8 +621,8 @@ export default function CommentsPage() {
                                         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                                         <Input
                                             placeholder="Tìm kiếm nội dung hoặc người dùng..."
-                                            value={searchTerm}
-                                            onChange={(e) => setSearchTerm(e.target.value)}
+                                            value={tempSearchTerm}
+                                            onChange={(e) => setTempSearchTerm(e.target.value)}
                                             className="pl-10"
                                         />
                                     </div>
@@ -441,7 +631,7 @@ export default function CommentsPage() {
                                     <Label className="text-sm font-medium text-gray-700 mb-2">
                                         Công thức
                                     </Label>
-                                    <Select value={selectedRecipe} onValueChange={setSelectedRecipe}>
+                                    <Select value={tempSelectedRecipe} onValueChange={setTempSelectedRecipe}>
                                         <SelectTrigger>
                                             <SelectValue placeholder="Tất cả công thức" />
                                         </SelectTrigger>
@@ -459,7 +649,7 @@ export default function CommentsPage() {
                                     <Label className="text-sm font-medium text-gray-700 mb-2">
                                         Trạng thái
                                     </Label>
-                                    <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+                                    <Select value={tempSelectedStatus} onValueChange={setTempSelectedStatus}>
                                         <SelectTrigger>
                                             <SelectValue placeholder="Tất cả trạng thái" />
                                         </SelectTrigger>
@@ -475,19 +665,65 @@ export default function CommentsPage() {
                                     <Label className="text-sm font-medium text-gray-700 mb-2">Ngày đăng</Label>
                                     <Input
                                         type="date"
-                                        value={selectedDate}
-                                        onChange={(e) => {
-                                            setSelectedDate(e.target.value);
-                                        }}
+                                        value={tempSelectedDate}
+                                        onChange={(e) => setTempSelectedDate(e.target.value)}
                                     />
                                 </div>
-                                <div className="flex items-end">
-                                    <Button className="w-full" variant="outline">
+                                <div className="flex items-end space-x-2">
+                                    <Button 
+                                        className="flex-1 bg-orange-500 hover:bg-orange-600" 
+                                        onClick={handleApplyFilter}
+                                    >
                                         <Filter className="w-4 h-4 mr-2" />
                                         Lọc
                                     </Button>
+                                    {hasActiveFilters() && (
+                                        <Button 
+                                            variant="outline" 
+                                            size="sm"
+                                            onClick={handleClearFilter}
+                                            className="px-3"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </Button>
+                                    )}
                                 </div>
                             </div>
+
+                            {/* Hiển thị thông tin bộ lọc đang áp dụng */}
+                            {hasActiveFilters() && (
+                                <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center space-x-2">
+                                            <span className="text-sm font-medium text-orange-800">Bộ lọc đang áp dụng:</span>
+                                            {appliedSearchTerm && (
+                                                <Badge variant="secondary" className="bg-orange-100 text-orange-800">
+                                                    Tìm kiếm: "{appliedSearchTerm}"
+                                                </Badge>
+                                            )}
+                                            {appliedSelectedRecipe !== "all" && (
+                                                <Badge variant="secondary" className="bg-orange-100 text-orange-800">
+                                                    Công thức: {appliedSelectedRecipe}
+                                                </Badge>
+                                            )}
+                                            {appliedSelectedStatus !== "all" && (
+                                                <Badge variant="secondary" className="bg-orange-100 text-orange-800">
+                                                    Trạng thái: {appliedSelectedStatus === "APPROVED" ? "Đã duyệt" : 
+                                                                appliedSelectedStatus === "PENDING" ? "Chờ duyệt" : "Ẩn"}
+                                                </Badge>
+                                            )}
+                                            {appliedSelectedDate && (
+                                                <Badge variant="secondary" className="bg-orange-100 text-orange-800">
+                                                    Ngày: {appliedSelectedDate}
+                                                </Badge>
+                                            )}
+                                        </div>
+                                        <span className="text-sm text-orange-600">
+                                            Tìm thấy {filteredComments.length} kết quả
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Table */}
                             <div className="overflow-x-auto">
@@ -498,13 +734,13 @@ export default function CommentsPage() {
                                                 <input
                                                     type="checkbox"
                                                     className="rounded"
-                                                    checked={selectedComments.length === filteredComments.length && filteredComments.length > 0} // Cập nhật để phù hợp với filteredComments
+                                                    checked={selectedComments.length === filteredComments.length && filteredComments.length > 0}
                                                     onChange={handleSelectAll}
                                                 />
                                             </th>
                                             <th className="text-left py-3 px-4 font-semibold text-gray-700">
                                                 STT
-                                            </th> {/* Đổi ID thành STT để tránh nhầm lẫn với comment.id */}
+                                            </th>
                                             <th className="text-left py-3 px-4 font-semibold text-gray-700">
                                                 Người dùng
                                             </th>
@@ -529,7 +765,10 @@ export default function CommentsPage() {
                                         {filteredComments.length === 0 && !loading ? (
                                             <tr>
                                                 <td colSpan={8} className="text-center py-8 text-gray-500">
-                                                    Không tìm thấy bình luận nào phù hợp với bộ lọc.
+                                                    {hasActiveFilters() 
+                                                        ? "Không tìm thấy bình luận nào phù hợp với bộ lọc." 
+                                                        : "Không có bình luận nào."
+                                                    }
                                                 </td>
                                             </tr>
                                         ) : (
@@ -596,7 +835,6 @@ export default function CommentsPage() {
                                                                         >
                                                                             Hủy
                                                                         </Button>
-                                                                        
                                                                     </DialogFooter>
                                                                 </DialogContent>
                                                             </Dialog>
@@ -633,7 +871,7 @@ export default function CommentsPage() {
                                                             {comment.status === "HIDDEN" || comment.status === "PENDING" ? (
                                                                 <Button
                                                                     size="sm"
-                                                                    title="Duyệt bình luận" // Thêm title để hover hiển thị
+                                                                    title="Duyệt bình luận"
                                                                     onClick={() => handleUpdateCommentStatus(comment.id, "APPROVED")}
                                                                     className="bg-green-500 hover:bg-green-600"
                                                                 >
@@ -643,7 +881,7 @@ export default function CommentsPage() {
                                                                 <Button
                                                                     size="sm"
                                                                     variant="outline"
-                                                                    title="Ẩn bình luận" // Thêm title để hover hiển thị
+                                                                    title="Ẩn bình luận"
                                                                     onClick={() => handleUpdateCommentStatus(comment.id, "HIDDEN")}
                                                                     className="text-gray-600 border-gray-600 hover:bg-gray-50"
                                                                 >
@@ -659,25 +897,39 @@ export default function CommentsPage() {
                                 </table>
                             </div>
 
-                            <div className="flex justify-center mt-6">
-                                <div className="flex space-x-2">
-                                    <Button variant="outline" size="sm">
-                                        «
-                                    </Button>
-                                    <Button size="sm" className="bg-orange-500 text-white">
-                                        1
-                                    </Button>
-                                    <Button variant="outline" size="sm">
-                                        2
-                                    </Button>
-                                    <Button variant="outline" size="sm">
-                                        3
-                                    </Button>
-                                    <Button variant="outline" size="sm">
-                                        »
-                                    </Button>
+                            {/* Thêm điều kiện ẩn phân trang khi có filter */}
+                            {!hasActiveFilters() && (
+                                <div className="flex justify-center mt-6">
+                                    <div className="flex space-x-2">
+                                        <Button
+                                            size="sm"
+                                            className="bg-orange-500 text-white"
+                                            onClick={handlePreviousPage}
+                                            disabled={currentPage === 0}
+                                        >
+                                            «
+                                        </Button>
+                                        {[...Array(totalPages)].map((_, index) => (
+                                            <Button
+                                                key={index}
+                                                size="sm"
+                                                className={currentPage === index ? "bg-orange-500 text-white" : "outline"}
+                                                onClick={() => setCurrentPage(index)}
+                                            >
+                                                {index + 1}
+                                            </Button>
+                                        ))}
+                                        <Button
+                                            size="sm"
+                                            className="bg-orange-500 text-white"
+                                            onClick={handleNextPage}
+                                            disabled={currentPage === totalPages - 1}
+                                        >
+                                            »
+                                        </Button>
+                                    </div>
                                 </div>
-                            </div>
+                            )}
                         </CardContent>
                     </Card>
                 </>
