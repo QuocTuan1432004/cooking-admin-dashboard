@@ -158,7 +158,7 @@ export default function RecipesPage() {
       <RecipeManagementAdvanced
         recipes={recipes}
         onRecipeUpdate={setRecipes}
-        showApprovalActions={false}
+        showApprovalActions={true}
         showRating={true}
         showViews={true}
         showFilters={true}
