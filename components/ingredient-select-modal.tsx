@@ -64,7 +64,8 @@ export function IngredientSelectModal({ isOpen, onClose, onSelect, ingredients }
     const validIngredients = selectedIngredients.filter((item) => item.quantity.trim())
 
     validIngredients.forEach((item) => {
-      const ingredientText = `${item.quantity}${item.unit} ${item.ingredient.ingredientName}`
+      // Sử dụng MeasurementUnit từ ingredient thay vì unit có thể thay đổi
+      const ingredientText = `${item.quantity} ${item.ingredient.measurementUnit} ${item.ingredient.ingredientName}`
       onSelect(ingredientText)
     })
 
@@ -132,7 +133,7 @@ export function IngredientSelectModal({ isOpen, onClose, onSelect, ingredients }
                     <div key={ingredient.id} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded">
                       <div>
                         <span className="font-medium">{ingredient.ingredientName}</span>
-                        <span className="text-sm text-gray-500 ml-2">({ingredient.caloriesPerUnit} calo/100g)</span>
+                        <span className="text-sm text-gray-500 ml-2">({ingredient.caloriesPerUnit} calo/ {ingredient.measurementUnit})</span>
                       </div>
                       <Button
                         size="sm"
@@ -166,7 +167,7 @@ export function IngredientSelectModal({ isOpen, onClose, onSelect, ingredients }
                   <div key={item.ingredient.id} className="flex items-center gap-2 p-2 border rounded">
                     <div className="flex-1">
                       <span className="font-medium">{item.ingredient.ingredientName}</span>
-                      <span className="text-sm text-gray-500 ml-1">({item.ingredient.caloriesPerUnit} calo/100g)</span>
+                      <span className="text-sm text-gray-500 ml-1">({item.ingredient.caloriesPerUnit} calo/ {item.ingredient.measurementUnit})</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Input
@@ -178,21 +179,7 @@ export function IngredientSelectModal({ isOpen, onClose, onSelect, ingredients }
                         className="w-20"
                         placeholder="Số lượng"
                       />
-                      <select
-                        value={item.unit}
-                        onChange={(e) => handleUnitChange(item.ingredient.id, e.target.value)}
-                        className="px-2 py-1 border rounded text-sm"
-                      >
-                        <option value="g">g</option>
-                        <option value="kg">kg</option>
-                        <option value="ml">ml</option>
-                        <option value="l">l</option>
-                        <option value="muỗng canh">muỗng canh</option>
-                        <option value="muỗng cà phê">muỗng cà phê</option>
-                        <option value="củ">củ</option>
-                        <option value="quả">quả</option>
-                        <option value="con">con</option>
-                      </select>
+          
                       <Button
                         size="sm"
                         variant="outline"

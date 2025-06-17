@@ -55,23 +55,27 @@ export interface RecipeUpdateRequest {
 export interface Ingredient {
   id: string
   ingredientName: string
+  measurementUnit: string
   caloriesPerUnit: string
 }
 
 export interface IngredientsResponse {
   id: string
   ingredientName: string
+  measurementUnit: string
   caloriesPerUnit: string
 }
 
 export interface IngredientsCreationRequest {
   ingredientName: string
   caloriesPerUnit: string
+  measurementUnit?: string
 }
 
 export interface IngredientsUpdateRequest {
   ingredientName: string
   caloriesPerUnit: string
+  measurementUnit?: string
 }
 
 // Recipe Ingredients Types

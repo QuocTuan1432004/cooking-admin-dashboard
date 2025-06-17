@@ -12,7 +12,8 @@ import { RecipeEditModalImproved } from "./recipe-edit-modal-improved"
 import { RecipeStatsCards } from "./recipe-stats-cards"
 import { RecipeBulkActions } from "./recipe-bulk-actions"
 import { RecipePagination } from "./recipe-pagination"
-import { IngredientAddModal, type Ingredient } from "./ingredient-add-modal"
+import { type Ingredient } from "@/hooks/RecipeApi/recipeTypes"
+import { IngredientAddModal } from "./ingredient-add-modal"
 
 interface RecipeManagementAdvancedProps {
   recipes: Recipe[]
@@ -56,16 +57,16 @@ export function RecipeManagementAdvanced({
 
   // Ingredients state
   const [ingredients, setIngredients] = useState<Ingredient[]>([
-    { id: 1, name: "Thịt heo", calories: 250 },
-    { id: 2, name: "Cà chua", calories: 18 },
-    { id: 3, name: "Hành tây", calories: 40 },
-    { id: 4, name: "Gạo tẻ", calories: 365 },
-    { id: 5, name: "Dầu ăn", calories: 884 },
-    { id: 6, name: "Gà ta", calories: 239 },
-    { id: 7, name: "Gừng tươi", calories: 80 },
-    { id: 8, name: "Nước mắm", calories: 10 },
-    { id: 9, name: "Đường trắng", calories: 387 },
-    { id: 10, name: "Tiêu đen", calories: 251 },
+    // { id: 1, name: "Thịt heo", calories: 250 },
+    // { id: 2, name: "Cà chua", calories: 18 },
+    // { id: 3, name: "Hành tây", calories: 40 },
+    // { id: 4, name: "Gạo tẻ", calories: 365 },
+    // { id: 5, name: "Dầu ăn", calories: 884 },
+    // { id: 6, name: "Gà ta", calories: 239 },
+    // { id: 7, name: "Gừng tươi", calories: 80 },
+    // { id: 8, name: "Nước mắm", calories: 10 },
+    // { id: 9, name: "Đường trắng", calories: 387 },
+    // { id: 10, name: "Tiêu đen", calories: 251 },
   ])
 
   // Filter recipes

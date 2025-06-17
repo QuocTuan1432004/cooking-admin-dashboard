@@ -18,10 +18,9 @@ export const createRecipe = async (subCategoryId : string,data: RecipeCreationRe
     formdata.append("description", data.description);
     formdata.append("difficulty", data.difficulty);
     formdata.append("cookingTime", data.cookingTime);
-    formdata.append("subCategoryId", subCategoryId);
     formdata.append("file", file);
 
-    const response = await authenticatedFetch(`${API_BASE_URL}/recipes`, {
+    const response = await authenticatedFetch(`${API_BASE_URL}/recipe/create/${subCategoryId}`, {
         method: "POST",
         body: formdata
     });
@@ -58,7 +57,7 @@ export const getAllRecipe = async (page: number, size: number): Promise<ApiRespo
 }
 
 export const getReipceBySubCategoryId = async (subCategoryId: string, page: number, size: number): Promise<ApiResponse<PageResponse<RecipeResponse>>> => {
-  const response = await authenticatedFetch(`${API_BASE_URL}/recipes/subCategory/${subCategoryId}?page=${page}&size=${size}`)
+  const response = await authenticatedFetch(`${API_BASE_URL}/recipe/subCategory/${subCategoryId}?page=${page}&size=${size}`)
 
   const result: ApiResponse<PageResponse<RecipeResponse>> = await handleResponse(response)
   return result

@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Trash2, Save, X, Search, Edit, Clock } from "lucide-react"
 import Image from "next/image"
 import type { Recipe } from "./recipe-detail-modal"
-import type { Ingredient } from "./ingredient-add-modal"
+import type { Ingredient } from "@/hooks/RecipeApi/recipeTypes"
 import { IngredientSelectModal } from "./ingredient-select-modal"
 import { InstructionAddModal, type Instruction } from "./instruction-add-modal"
 
