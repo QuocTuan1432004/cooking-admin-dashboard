@@ -23,18 +23,27 @@ export function IngredientAddModal({ isOpen, onClose, onSave }: IngredientAddMod
   const [isLoading, setIsLoading] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  const units = [
-    { value: "g", label: "g (gram)" },
-    { value: "kg", label: "kg (kilogram)" },
-    { value: "ml", label: "ml (mililít)" },
-    { value: "l", label: "l (lít)" },
-    { value: "muỗng canh", label: "muỗng canh" },
-    { value: "muỗng cà phê", label: "muỗng cà phê" },
-    { value: "củ", label: "củ" },
-    { value: "quả", label: "quả" },
-    { value: "con", label: "con" },
-  ]
-
+const units = [
+  { value: "g", label: "g (gram)" },
+  { value: "kg", label: "kg (kilogram)" },
+  { value: "ml", label: "ml (mililít)" },
+  { value: "l", label: "l (lít)" },
+  { value: "muỗng canh", label: "muỗng canh" },
+  { value: "muỗng cà phê", label: "muỗng cà phê" },
+  { value: "chén", label: "chén" },
+  { value: "bát", label: "bát" },
+  { value: "củ", label: "củ" },
+  { value: "quả", label: "quả" },
+  { value: "con", label: "con" },
+  { value: "lá", label: "lá" },
+  { value: "cây", label: "cây" },
+  { value: "miếng", label: "miếng" },
+  { value: "lát", label: "lát" },
+  { value: "thìa", label: "thìa" },
+  { value: "tô", label: "tô" },
+  { value: "lon", label: "lon" },
+  { value: "chai", label: "chai" },
+]
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {}
 

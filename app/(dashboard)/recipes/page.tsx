@@ -5,10 +5,29 @@ import { Header } from "@/components/ui/header"
 import { useRouter } from "next/navigation"
 import type { Recipe } from "@/components/recipe-detail-modal"
 import { RecipeManagementAdvanced } from "@/components/recipe-management-advanced"
+import { IngredientEditModal } from "@/components/ingredient-edit-modal"
+import { IngredientDeleteModal } from "@/components/ingredient-delete-modal"
+import type { Ingredient } from "@/hooks/RecipeApi/recipeTypes"
 
 export default function RecipesPage() {
   const router = useRouter()
   const [unreadNotifications] = useState(3)
+  const [isIngredientEditOpen, setIsIngredientEditOpen] = useState(false)
+  const [isIngredientDeleteOpen, setIsIngredientDeleteOpen] = useState(false)
+
+  // Sample ingredients data - in real app, this would come from API
+  const [ingredients] = useState<Ingredient[]>([
+    // { id: "1", ingredientName: "Thịt heo" },
+    // { id: "2", ingredientName: "Gà ta" },
+    // { id: "3", ingredientName: "Cá bông lau" },
+    // { id: "4", ingredientName: "Rau muống" },
+    // { id: "5", ingredientName: "Đậu xanh" },
+    // { id: "6", ingredientName: "Gừng tươi" },
+    // { id: "7", ingredientName: "Hành tím" },
+    // { id: "8", ingredientName: "Tỏi" },
+    // { id: "9", ingredientName: "Nước mắm" },
+    // { id: "10", ingredientName: "Đường" },
+  ])
 
   const [recipes, setRecipes] = useState<Recipe[]>([
     {
@@ -133,28 +152,66 @@ export default function RecipesPage() {
     router.push("/login")
   }
 
+  // Get all unique ingredients from all recipes
+  const getAllIngredientsFromRecipes = (): string[] => {
+    const allIngredients = recipes.flatMap((recipe) => recipe.ingredients || [])
+    return [...new Set(allIngredients)]
+  }
+
+  const handleIngredientEdit = (updatedIngredients: string[]) => {
+    // In a real app, you would update the ingredients in the database
+    console.log("Updated ingredients:", updatedIngredients)
+    // You could also update recipes that use these ingredients
+  }
+
+  const handleIngredientDelete = (updatedIngredients: string[]) => {
+    // In a real app, you would delete ingredients from the database
+    console.log("Remaining ingredients after deletion:", updatedIngredients)
+    // You could also update recipes that use the deleted ingredients
+  }
+
   return (
-    <div>
-      <Header
-        title="Quản lý Công thức"
-        showSearch={false}
-        userName="Nguyễn Huỳnh Quốc Tuấn"
-        onLogout={handleLogout}
-        notificationCount={unreadNotifications}
+    <>
+      <div>
+        <Header
+          title="Quản lý Công thức"
+          showSearch={false}
+          userName="Nguyễn Huỳnh Quốc Tuấn"
+          onLogout={handleLogout}
+          notificationCount={unreadNotifications}
+        />
+
+        <RecipeManagementAdvanced
+          recipes={recipes}
+          onRecipeUpdate={setRecipes}
+          showApprovalActions={true}
+          showFilters={true}
+          showStats={true}
+          showBulkActions={true}
+          title="Danh sách công thức"
+          onAddRecipe={() => router.push("/recipes/create")}
+          // Add ingredient management actions
+          onEditIngredients={() => setIsIngredientEditOpen(true)}
+          onDeleteIngredients={() => setIsIngredientDeleteOpen(true)}
+        />
+      </div>
+
+      {/* Ingredient Edit Modal */}
+      <IngredientEditModal
+        isOpen={isIngredientEditOpen}
+        onClose={() => setIsIngredientEditOpen(false)}
+        ingredients={getAllIngredientsFromRecipes()}
+        onSave={handleIngredientEdit}
+        // availableIngredients={ingredients}
       />
 
-      <RecipeManagementAdvanced
-        recipes={recipes}
-        onRecipeUpdate={setRecipes}
-        showApprovalActions={true}
-        // showRating={true}
-        // showViews={true}
-        showFilters={true}
-        showStats={true}
-        showBulkActions={true}
-        title="Danh sách công thức"
-        onAddRecipe={() => router.push("/recipes/create")}
+      {/* Ingredient Delete Modal */}
+      <IngredientDeleteModal
+        isOpen={isIngredientDeleteOpen}
+        onClose={() => setIsIngredientDeleteOpen(false)}
+        ingredients={getAllIngredientsFromRecipes()}
+        onDelete={handleIngredientDelete}
       />
-    </div>
+    </>
   )
 }

@@ -8,12 +8,13 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Trash2, Save, X, Search, Edit, Clock } from "lucide-react"
+import { Save, X, Search, Edit, ChefHat } from "lucide-react"
 import Image from "next/image"
 import type { Recipe } from "./recipe-detail-modal"
 import type { Ingredient } from "@/hooks/RecipeApi/recipeTypes"
 import { IngredientSelectModal } from "./ingredient-select-modal"
-import { InstructionAddModal, type Instruction } from "./instruction-add-modal"
+import { InstructionModal } from "./instruction-modal"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 interface RecipeEditModalProps {
   recipe: Recipe | null
@@ -30,8 +31,6 @@ export function RecipeEditModalImproved({ recipe, isOpen, onClose, onSave, ingre
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [isIngredientSelectOpen, setIsIngredientSelectOpen] = useState(false)
   const [isInstructionModalOpen, setIsInstructionModalOpen] = useState(false)
-  const [editingInstructionIndex, setEditingInstructionIndex] = useState<number | null>(null)
-  const [detailedInstructions, setDetailedInstructions] = useState<Instruction[]>([])
 
   // Đồng bộ recipe với editingRecipe khi modal mở
   useEffect(() => {
@@ -41,19 +40,9 @@ export function RecipeEditModalImproved({ recipe, isOpen, onClose, onSave, ingre
         ingredients: recipe.ingredients || [],
         instructions: recipe.instructions || [],
       })
-
-      // Convert simple instructions to detailed instructions
-      const detailed = (recipe.instructions || []).map((instruction, index) => ({
-        step: index + 1,
-        description: instruction,
-        time: undefined,
-        image: undefined,
-      }))
-      setDetailedInstructions(detailed)
       setErrors({})
     } else if (!isOpen) {
       setEditingRecipe(null)
-      setDetailedInstructions([])
       setErrors({})
     }
   }, [isOpen, recipe])
@@ -77,7 +66,7 @@ export function RecipeEditModalImproved({ recipe, isOpen, onClose, onSave, ingre
       newErrors.ingredients = "Phải có ít nhất một nguyên liệu"
     }
 
-    if (detailedInstructions.length === 0 || !detailedInstructions.some((inst) => inst.description.trim())) {
+    if (!editingRecipe?.instructions?.some((inst) => inst.trim())) {
       newErrors.instructions = "Phải có ít nhất một bước hướng dẫn"
     }
 
@@ -92,16 +81,11 @@ export function RecipeEditModalImproved({ recipe, isOpen, onClose, onSave, ingre
       return
     }
 
-    // Convert detailed instructions back to simple strings for compatibility
-    const simpleInstructions = detailedInstructions
-      .filter((inst) => inst.description.trim())
-      .map((inst) => inst.description)
-
-    // Lọc bỏ các nguyên liệu trống
+    // Lọc bỏ các nguyên liệu và hướng dẫn trống
     const cleanedRecipe = {
       ...editingRecipe,
       ingredients: editingRecipe.ingredients?.filter((ing) => ing.trim()) || [],
-      instructions: simpleInstructions,
+      instructions: editingRecipe.instructions?.filter((inst) => inst.trim()) || [],
     }
 
     onSave(cleanedRecipe)
@@ -110,7 +94,6 @@ export function RecipeEditModalImproved({ recipe, isOpen, onClose, onSave, ingre
 
   const handleCancel = () => {
     setEditingRecipe(null)
-    setDetailedInstructions([])
     setErrors({})
     onClose()
   }
@@ -122,14 +105,6 @@ export function RecipeEditModalImproved({ recipe, isOpen, onClose, onSave, ingre
       if (errors[field]) {
         setErrors((prev) => ({ ...prev, [field]: "" }))
       }
-    }
-  }
-
-  const updateIngredient = (index: number, value: string) => {
-    if (editingRecipe && editingRecipe.ingredients) {
-      const newIngredients = [...editingRecipe.ingredients]
-      newIngredients[index] = value
-      updateEditingRecipe("ingredients", newIngredients)
     }
   }
 
@@ -145,42 +120,6 @@ export function RecipeEditModalImproved({ recipe, isOpen, onClose, onSave, ingre
       const newIngredients = editingRecipe.ingredients.filter((_, i) => i !== index)
       updateEditingRecipe("ingredients", newIngredients)
     }
-  }
-
-  const handleAddInstruction = () => {
-    setEditingInstructionIndex(null)
-    setIsInstructionModalOpen(true)
-  }
-
-  const handleEditInstruction = (index: number) => {
-    setEditingInstructionIndex(index)
-    setIsInstructionModalOpen(true)
-  }
-
-  const handleSaveInstruction = (instructionData: Omit<Instruction, "step">) => {
-    if (editingInstructionIndex !== null) {
-      // Edit existing instruction
-      const newInstructions = [...detailedInstructions]
-      newInstructions[editingInstructionIndex] = {
-        ...instructionData,
-        step: editingInstructionIndex + 1,
-      }
-      setDetailedInstructions(newInstructions)
-    } else {
-      // Add new instruction
-      const newInstruction: Instruction = {
-        ...instructionData,
-        step: detailedInstructions.length + 1,
-      }
-      setDetailedInstructions([...detailedInstructions, newInstruction])
-    }
-  }
-
-  const removeInstruction = (index: number) => {
-    const newInstructions = detailedInstructions.filter((_, i) => i !== index)
-    // Re-number steps
-    const renumbered = newInstructions.map((inst, i) => ({ ...inst, step: i + 1 }))
-    setDetailedInstructions(renumbered)
   }
 
   if (!editingRecipe) return null
@@ -207,219 +146,279 @@ export function RecipeEditModalImproved({ recipe, isOpen, onClose, onSave, ingre
 
           <div className="space-y-6">
             {/* Recipe Image and Basic Info */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="md:col-span-1">
-                <Image
-                  src={editingRecipe.image || "/placeholder.svg"}
-                  alt={editingRecipe.name || "Recipe"}
-                  width={300}
-                  height={300}
-                  className="w-full h-64 object-cover rounded-lg"
-                />
-                <div className="mt-2">
-                  <Label className="text-sm font-medium">URL ảnh</Label>
-                  <Input
-                    value={editingRecipe.image || ""}
-                    onChange={(e) => updateEditingRecipe("image", e.target.value)}
-                    placeholder="https://example.com/image.jpg"
-                    className="mt-1"
-                  />
-                </div>
-              </div>
-
-              <div className="md:col-span-2 space-y-4">
-                <div>
-                  <Label className="text-sm font-medium">
-                    Tên công thức <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    value={editingRecipe.name || ""}
-                    onChange={(e) => updateEditingRecipe("name", e.target.value)}
-                    className={`mt-1 ${errors.name ? "border-red-500" : ""}`}
-                    placeholder="Nhập tên công thức"
-                  />
-                  {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label className="text-sm font-medium">
-                      Danh mục <span className="text-red-500">*</span>
-                    </Label>
-                    <Select
-                      value={editingRecipe.category || ""}
-                      onValueChange={(value) => updateEditingRecipe("category", value)}
-                    >
-                      <SelectTrigger className={`mt-1 ${errors.category ? "border-red-500" : ""}`}>
-                        <SelectValue placeholder="Chọn danh mục" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CATEGORIES.map((category) => (
-                          <SelectItem key={category} value={category}>
-                            {category}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {errors.category && <p className="text-red-500 text-sm mt-1">{errors.category}</p>}
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium">Tác giả</Label>
-                    <Input value={editingRecipe.author || ""} disabled className="mt-1 bg-gray-100" />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label className="text-sm font-medium">Thời gian nấu</Label>
-                    <Input
-                      value={editingRecipe.cookingTime || ""}
-                      onChange={(e) => updateEditingRecipe("cookingTime", e.target.value)}
-                      className="mt-1"
-                      placeholder="VD: 30 phút"
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <ChefHat className="w-5 h-5 mr-2 text-orange-500" />
+                  Thông tin cơ bản
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="md:col-span-1">
+                    <Image
+                      src={editingRecipe.image || "/placeholder.svg"}
+                      alt={editingRecipe.name || "Recipe"}
+                      width={300}
+                      height={300}
+                      className="w-full h-64 object-cover rounded-lg"
                     />
+                    <div className="mt-2">
+                      <Label className="text-sm font-medium">URL ảnh</Label>
+                      <Input
+                        value={editingRecipe.image || ""}
+                        onChange={(e) => updateEditingRecipe("image", e.target.value)}
+                        placeholder="https://example.com/image.jpg"
+                        className="mt-1"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <Label className="text-sm font-medium">Khẩu phần</Label>
-                    <Input
-                      type="number"
-                      min="1"
-                      value={editingRecipe.servings || ""}
-                      onChange={(e) => updateEditingRecipe("servings", Number.parseInt(e.target.value) || 0)}
-                      className="mt-1"
-                      placeholder="Số người ăn"
-                    />
-                  </div>
-                </div>
 
-                <div>
-                  <Label className="text-sm font-medium">
-                    Mô tả <span className="text-red-500">*</span>
-                  </Label>
-                  <Textarea
-                    value={editingRecipe.description || ""}
-                    onChange={(e) => updateEditingRecipe("description", e.target.value)}
-                    className={`mt-1 ${errors.description ? "border-red-500" : ""}`}
-                    rows={3}
-                    placeholder="Mô tả ngắn về công thức"
-                  />
-                  {errors.description && <p className="text-red-500 text-sm mt-1">{errors.description}</p>}
+                  <div className="md:col-span-2 space-y-4">
+                    <div>
+                      <Label className="text-sm font-medium">
+                        Tên công thức <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        value={editingRecipe.name || ""}
+                        onChange={(e) => updateEditingRecipe("name", e.target.value)}
+                        className={`mt-1 ${errors.name ? "border-red-500" : ""}`}
+                        placeholder="Nhập tên công thức"
+                      />
+                      {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-sm font-medium">
+                          Danh mục <span className="text-red-500">*</span>
+                        </Label>
+                        <Select
+                          value={editingRecipe.category || ""}
+                          onValueChange={(value) => updateEditingRecipe("category", value)}
+                        >
+                          <SelectTrigger className={`mt-1 ${errors.category ? "border-red-500" : ""}`}>
+                            <SelectValue placeholder="Chọn danh mục" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {CATEGORIES.map((category) => (
+                              <SelectItem key={category} value={category}>
+                                {category}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {errors.category && <p className="text-red-500 text-sm mt-1">{errors.category}</p>}
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium">Tác giả</Label>
+                        <Input value={editingRecipe.author || ""} disabled className="mt-1 bg-gray-100" />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4">
+                      <div>
+                        <Label className="text-sm font-medium">Thời gian nấu</Label>
+                        <Input
+                          value={editingRecipe.cookingTime || ""}
+                          onChange={(e) => updateEditingRecipe("cookingTime", e.target.value)}
+                          className="mt-1"
+                          placeholder="VD: 30 phút"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <Label className="text-sm font-medium">
+                        Mô tả <span className="text-red-500">*</span>
+                      </Label>
+                      <Textarea
+                        value={editingRecipe.description || ""}
+                        onChange={(e) => updateEditingRecipe("description", e.target.value)}
+                        className={`mt-1 ${errors.description ? "border-red-500" : ""}`}
+                        rows={3}
+                        placeholder="Mô tả ngắn về công thức"
+                      />
+                      {errors.description && <p className="text-red-500 text-sm mt-1">{errors.description}</p>}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
 
             <Separator />
 
             {/* Ingredients */}
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <div>
+            <Card>
+              <CardHeader>
+                <CardTitle>
                   <h3 className="text-lg font-semibold">
                     Nguyên liệu <span className="text-red-500">*</span>
                   </h3>
                   {errors.ingredients && <p className="text-red-500 text-sm">{errors.ingredients}</p>}
-                </div>
-                <Button
-                  size="sm"
-                  onClick={() => setIsIngredientSelectOpen(true)}
-                  className="bg-blue-500 hover:bg-blue-600"
-                >
-                  <Search className="w-4 h-4 mr-2" />
-                  Chọn nguyên liệu
-                </Button>
-              </div>
-              <div className="space-y-2">
-                {editingRecipe.ingredients?.map((ingredient, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                    <span className="text-sm text-gray-500 w-8">{index + 1}.</span>
-                    <Input
-                      value={ingredient}
-                      onChange={(e) => updateIngredient(index, e.target.value)}
-                      className="flex-1"
-                      placeholder="VD: 500g thịt heo"
-                    />
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {/* Only "Chọn nguyên liệu" button */}
+                  <div className="flex justify-start">
                     <Button
                       size="sm"
-                      variant="outline"
-                      onClick={() => removeIngredient(index)}
-                      className="text-red-600 hover:bg-red-50"
-                      disabled={editingRecipe.ingredients?.length === 1}
+                      onClick={() => setIsIngredientSelectOpen(true)}
+                      className="bg-blue-500 hover:bg-blue-600"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Search className="w-4 h-4 mr-2" />
+                      Chọn nguyên liệu
                     </Button>
                   </div>
-                ))}
-              </div>
-            </div>
+
+                  {editingRecipe.ingredients && editingRecipe.ingredients.length > 0 ? (
+                    <>
+                      {/* Header */}
+                      <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-gray-50 rounded-lg font-medium text-gray-700">
+                        <div className="col-span-1">#</div>
+                        <div className="col-span-6">Tên nguyên liệu</div>
+                        <div className="col-span-2">Số lượng</div>
+                        <div className="col-span-2">Đơn vị</div>
+                        <div className="col-span-1">Xóa</div>
+                      </div>
+
+                      {/* Ingredient List */}
+                      <div className="space-y-2">
+                        {editingRecipe.ingredients.map((ingredient, index) => {
+                          const parts = ingredient.trim().split(" ")
+                          let quantity = ""
+                          let unit = ""
+                          let name = ""
+
+                          if (parts.length >= 3) {
+                            const quantityMatch = parts[0].match(/[\d.,]+/)
+                            if (quantityMatch) {
+                              quantity = quantityMatch[0]
+                              const remainingUnit = parts[0].replace(quantityMatch[0], "")
+                              if (remainingUnit) {
+                                unit = remainingUnit
+                                name = parts.slice(1).join(" ")
+                              } else {
+                                unit = parts[1]
+                                name = parts.slice(2).join(" ")
+                              }
+                            } else {
+                              name = ingredient
+                            }
+                          } else {
+                            name = ingredient
+                          }
+
+                          return (
+                            <div
+                              key={index}
+                              className="grid grid-cols-12 gap-4 items-center px-4 py-3 border rounded-lg hover:bg-gray-50"
+                            >
+                              <div className="col-span-1">
+                                <span className="text-sm font-medium text-gray-600">{index + 1}</span>
+                              </div>
+                              <div className="col-span-6">
+                                <div className="p-2 bg-gray-100 rounded border">
+                                  <span className="text-gray-800 font-medium">{name || ingredient}</span>
+                                </div>
+                              </div>
+                              <div className="col-span-2">
+                                <div className="p-2 bg-gray-100 rounded border text-center">
+                                  <span className="text-gray-800 font-medium">{quantity || "-"}</span>
+                                </div>
+                              </div>
+                              <div className="col-span-2">
+                                <div className="p-2 bg-gray-100 rounded border text-center">
+                                  <span className="text-gray-800 font-medium">{unit || "-"}</span>
+                                </div>
+                              </div>
+                              <div className="col-span-1">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => removeIngredient(index)}
+                                  className="text-red-600 hover:text-red-800 hover:bg-red-50 p-1"
+                                  disabled={editingRecipe.ingredients?.length === 1}
+                                >
+                                  <X className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-lg">
+                      <div className="text-4xl mb-4">🥗</div>
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">Chưa có nguyên liệu nào</h3>
+                      <p className="text-gray-600 mb-4">Nhấn "Chọn nguyên liệu" để thêm nguyên liệu cho công thức</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
 
             <Separator />
 
             {/* Instructions */}
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-lg font-semibold">
-                    Cách làm <span className="text-red-500">*</span>
-                  </h3>
-                  {errors.instructions && <p className="text-red-500 text-sm">{errors.instructions}</p>}
-                </div>
-                <Button size="sm" onClick={handleAddInstruction} className="bg-orange-500 hover:bg-orange-600">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Thêm bước
-                </Button>
-              </div>
-              <div className="space-y-4">
-                {detailedInstructions.map((instruction, index) => (
-                  <div key={index} className="border rounded-lg p-4 bg-gray-50">
-                    <div className="flex items-start gap-4">
-                      <div className="flex-shrink-0 w-8 h-8 bg-orange-500 text-white rounded-full flex items-center justify-center font-semibold">
-                        {instruction.step}
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <h4 className="font-medium">Bước {instruction.step}</h4>
-                          {instruction.time && (
-                            <div className="flex items-center gap-1 text-sm text-gray-600">
-                              <Clock className="w-3 h-3" />
-                              <span>{instruction.time}</span>
-                            </div>
-                          )}
-                        </div>
-                        <p className="text-gray-700 mb-2">{instruction.description}</p>
-                        {instruction.image && (
-                          <Image
-                            src={instruction.image || "/placeholder.svg"}
-                            alt={`Bước ${instruction.step}`}
-                            width={150}
-                            height={100}
-                            className="rounded object-cover"
-                          />
-                        )}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleEditInstruction(index)}
-                          className="text-blue-600 hover:bg-blue-50"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => removeInstruction(index)}
-                          className="text-red-600 hover:bg-red-50"
-                          disabled={detailedInstructions.length === 1}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold">
+                      Cách làm <span className="text-red-500">*</span>
+                    </h3>
+                    {errors.instructions && <p className="text-red-500 text-sm">{errors.instructions}</p>}
                   </div>
-                ))}
-              </div>
-            </div>
+                  <Button
+                    size="sm"
+                    onClick={() => setIsInstructionModalOpen(true)}
+                    className="bg-orange-500 hover:bg-orange-600"
+                  >
+                    <Edit className="w-4 h-4 mr-2" />
+                    Chỉnh sửa
+                  </Button>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {editingRecipe.instructions && editingRecipe.instructions.length > 0 ? (
+                    <div className="space-y-4">
+                      {editingRecipe.instructions.map((instruction, index) => (
+                        <div key={index} className="border rounded-lg p-4 bg-gray-50">
+                          <div className="flex items-start gap-4">
+                            <div className="flex-shrink-0 w-8 h-8 bg-orange-500 text-white rounded-full flex items-center justify-center font-semibold">
+                              {index + 1}
+                            </div>
+                            <div className="flex-1">
+                              <h4 className="font-medium mb-2">Bước {index + 1}</h4>
+                              <p className="text-gray-700">{instruction}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-lg">
+                      <div className="text-4xl mb-4">📝</div>
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">Chưa có hướng dẫn nào</h3>
+                      <p className="text-gray-600 mb-4">Nhấn "Chỉnh sửa" để thêm hướng dẫn cho công thức</p>
+                      <Button
+                        type="button"
+                        onClick={() => setIsInstructionModalOpen(true)}
+                        className="bg-orange-500 hover:bg-orange-600"
+                      >
+                        <Edit className="w-4 h-4 mr-2" />
+                        Thêm hướng dẫn đầu tiên
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </DialogContent>
       </Dialog>
@@ -432,15 +431,12 @@ export function RecipeEditModalImproved({ recipe, isOpen, onClose, onSave, ingre
         ingredients={ingredients}
       />
 
-      {/* Instruction Add Modal */}
-      <InstructionAddModal
+      {/* Instruction Modal */}
+      <InstructionModal
         isOpen={isInstructionModalOpen}
         onClose={() => setIsInstructionModalOpen(false)}
-        onSave={handleSaveInstruction}
-        stepNumber={editingInstructionIndex !== null ? editingInstructionIndex + 1 : detailedInstructions.length + 1}
-        editingInstruction={
-          editingInstructionIndex !== null ? detailedInstructions[editingInstructionIndex] : undefined
-        }
+        instructions={editingRecipe?.instructions || []}
+        onSave={(instructions) => updateEditingRecipe("instructions", instructions)}
       />
     </>
   )

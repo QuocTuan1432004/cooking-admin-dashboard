@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Plus, Carrot } from "lucide-react"
+import { Plus, Carrot, Edit, Trash2 } from "lucide-react"
 import type { Recipe } from "./recipe-detail-modal"
 import { RecipeTableEnhanced } from "./recipe-table-enhanced"
 import { RecipeDetailModal } from "./recipe-detail-modal"
@@ -12,7 +12,7 @@ import { RecipeEditModalImproved } from "./recipe-edit-modal-improved"
 import { RecipeStatsCards } from "./recipe-stats-cards"
 import { RecipeBulkActions } from "./recipe-bulk-actions"
 import { RecipePagination } from "./recipe-pagination"
-import { type Ingredient } from "@/hooks/RecipeApi/recipeTypes"
+import type { Ingredient } from "@/hooks/RecipeApi/recipeTypes"
 import { IngredientAddModal } from "./ingredient-add-modal"
 
 interface RecipeManagementAdvancedProps {
@@ -24,6 +24,8 @@ interface RecipeManagementAdvancedProps {
   showBulkActions?: boolean
   title?: string
   onAddRecipe?: () => void
+  onEditIngredients?: () => void
+  onDeleteIngredients?: () => void
 }
 
 export function RecipeManagementAdvanced({
@@ -35,6 +37,8 @@ export function RecipeManagementAdvanced({
   showBulkActions = false,
   title = "Danh sách công thức",
   onAddRecipe,
+  onEditIngredients,
+  onDeleteIngredients,
 }: RecipeManagementAdvancedProps) {
   // Filter states
   const [searchTerm, setSearchTerm] = useState("")
@@ -157,7 +161,7 @@ export function RecipeManagementAdvanced({
   const handleAddIngredient = (newIngredient: Omit<Ingredient, "id">) => {
     const ingredient: Ingredient = {
       ...newIngredient,
-      id: Math.max(...ingredients.map((i) => i.id), 0) + 1,
+      id: (Math.max(...ingredients.map((i) => Number(i.id) || 0), 0) + 1).toString(),
     }
     setIngredients([...ingredients, ingredient])
     console.log("Đã thêm nguyên liệu:", ingredient)
@@ -186,6 +190,18 @@ export function RecipeManagementAdvanced({
                 <Carrot className="w-4 h-4 mr-2" />
                 Thêm nguyên liệu
               </Button>
+              {onEditIngredients && (
+                <Button className="bg-blue-500 hover:bg-blue-600" onClick={onEditIngredients}>
+                  <Edit className="w-4 h-4 mr-2" />
+                  Chỉnh sửa nguyên liệu
+                </Button>
+              )}
+              {onDeleteIngredients && (
+                <Button className="bg-red-500 hover:bg-red-600" onClick={onDeleteIngredients}>
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Xóa nguyên liệu
+                </Button>
+              )}
             </div>
           </CardTitle>
         </CardHeader>
