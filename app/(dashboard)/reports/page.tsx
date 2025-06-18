@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Header } from "@/components/ui/header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  getAllReports,
+  updateReportStatus,
+  deleteReport,
+  getReportStatistics,
+  ReportResponse,
+  bulkUpdateReportStatus,
+  bulkDeleteReports,
+} from "../../../hooks/reportedApi/reportedApi"; // Đảm bảo đường dẫn đúng
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -25,7 +34,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
-import { Flag, Search, Filter, Ban, CheckCircle, X, Eye } from "lucide-react";
+import { Flag, Search, Filter, Ban, CheckCircle, X, Eye, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
   Dialog,
@@ -36,102 +45,82 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-interface ReportedUser {
-  id: number;
-  reportedUser: string;
-  reportedBy: string;
-  reason: string;
-  description: string;
-  reportDate: string;
-  status: "pending" | "resolved" | "dismissed";
-  severity: "low" | "medium" | "high" | "critical";
-  userEmail: string;
-  reporterEmail: string;
-  evidence?: string;
-}
-
 export default function ReportsPage() {
   const router = useRouter();
   const [unreadNotifications] = useState(3);
 
-  const [reports, setReports] = useState<ReportedUser[]>([
-    {
-      id: 1,
-      reportedUser: "Nguyễn Văn A",
-      reportedBy: "Trần Thị B",
-      reason: "Spam hoặc quảng cáo",
-      description:
-        "Người dùng này liên tục đăng nội dung quảng cáo không liên quan đến công thức nấu ăn",
-      reportDate: "16/05/2025",
-      status: "pending",
-      severity: "medium",
-      userEmail: "nguyenvana@email.com",
-      reporterEmail: "tranthib@email.com",
-      evidence: "Đã đăng 5 bài quảng cáo trong 1 ngày",
-    },
-    {
-      id: 2,
-      reportedUser: "Lê Văn C",
-      reportedBy: "Phạm Thị D",
-      reason: "Ngôn từ thù địch hoặc quấy rối",
-      description:
-        "Sử dụng ngôn từ không phù hợp trong bình luận, xúc phạm người khác",
-      reportDate: "15/05/2025",
-      status: "pending",
-      severity: "high",
-      userEmail: "levanc@email.com",
-      reporterEmail: "phamthid@email.com",
-      evidence: "Bình luận có chứa từ ngữ xúc phạm",
-    },
-    {
-      id: 3,
-      reportedUser: "Hoàng Văn E",
-      reportedBy: "Nguyễn Thị F",
-      reason: "Nội dung không phù hợp",
-      description: "Đăng công thức có nội dung không phù hợp với độ tuổi",
-      reportDate: "14/05/2025",
-      status: "resolved",
-      severity: "low",
-      userEmail: "hoangvane@email.com",
-      reporterEmail: "nguyenthif@email.com",
-      evidence: "Công thức chứa hình ảnh không phù hợp",
-    },
-    {
-      id: 4,
-      reportedUser: "Trần Văn G",
-      reportedBy: "Lê Thị H",
-      reason: "Thông tin sai lệch",
-      description:
-        "Chia sẻ công thức có thông tin sai lệch, có thể gây hại cho sức khỏe",
-      reportDate: "13/05/2025",
-      status: "dismissed",
-      severity: "critical",
-      userEmail: "tranvang@email.com",
-      reporterEmail: "lethih@email.com",
-      evidence: "Công thức sử dụng nguyên liệu độc hại",
-    },
-    {
-      id: 5,
-      reportedUser: "Phạm Văn I",
-      reportedBy: "Hoàng Thị J",
-      reason: "Vi phạm bản quyền",
-      description: "Sao chép công thức từ nguồn khác mà không ghi nguồn",
-      reportDate: "12/05/2025",
-      status: "pending",
-      severity: "medium",
-      userEmail: "phamvani@email.com",
-      reporterEmail: "hoangthij@email.com",
-      evidence: "Công thức giống hệt từ website khác",
-    },
-  ]);
+  const [reports, setReports] = useState<ReportResponse[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedReports, setSelectedReports] = useState<string[]>([]);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalReports, setTotalReports] = useState(0);
+  const [reportStats, setReportStats] = useState({
+    total: 0,
+    pending: 0,
+    resolved: 0,
+    rejected: 0,
+    byType: { recipe: 0, comment: 0, user: 0 },
+    bySeverity: { low: 0, medium: 0, high: 0, critical: 0 },
+  });
 
-  const [selectedReports, setSelectedReports] = useState<number[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [selectedSeverity, setSelectedSeverity] = useState("all");
+  const [selectedType, setSelectedType] = useState("all");
   const [selectedDate, setSelectedDate] = useState("");
-  const [viewingReport, setViewingReport] = useState<ReportedUser | null>(null);
+  const [viewingReport, setViewingReport] = useState<ReportResponse | null>(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+
+  const fetchReports = useCallback(async (page = 0, size = 10, status?: string) => {
+    try {
+      setLoading(true);
+      const response = await getAllReports(page, size, status as "PENDING" | "all" | "RESOLVED" | "REJECTED" | undefined);
+
+      console.log("Raw API Response:", response);
+      if (response.content && response.content.length > 0) {
+        console.log("First report:", response.content[0]);
+        console.log("Available fields:", Object.keys(response.content[0]));
+      } else {
+        console.log("No content in response or content is empty.");
+      }
+
+      setReports(response.content || []);
+      setTotalPages(response.totalPages);
+      setTotalReports(response.totalElements);
+      setCurrentPage(page);
+
+    } catch (error) {
+      console.error("Failed to fetch reports:", error);
+      setReports([]);
+      setTotalPages(0);
+      setTotalReports(0);
+      setCurrentPage(0);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const fetchStatistics = useCallback(async () => {
+    try {
+      const stats = await getReportStatistics();
+      setReportStats({
+        total: stats.total,
+        pending: stats.pending,
+        resolved: stats.resolved,
+        rejected: stats.rejected,
+        byType: stats.byType,
+        bySeverity: stats.bySeverity,
+      });
+    } catch (error) {
+      console.error("Failed to fetch statistics:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchReports(currentPage, 10, selectedStatus === "all" ? undefined : selectedStatus.toUpperCase());
+    fetchStatistics();
+  }, [fetchReports, currentPage, selectedStatus, fetchStatistics]);
 
   const handleLogout = () => {
     console.log("Đăng xuất thành công");
@@ -140,7 +129,7 @@ export default function ReportsPage() {
   };
 
   const getStatusBadge = (status: string) => {
-    switch (status) {
+    switch (status.toLowerCase()) {
       case "pending":
         return (
           <Badge
@@ -161,7 +150,7 @@ export default function ReportsPage() {
             Đã xử lý
           </Badge>
         );
-      case "dismissed":
+      case "rejected":
         return (
           <Badge
             variant="secondary"
@@ -176,8 +165,10 @@ export default function ReportsPage() {
     }
   };
 
-  const getSeverityBadge = (severity: string) => {
-    switch (severity) {
+  const getSeverityBadge = (severity: string | null | undefined) => {
+    const safeSeverity = (severity || 'unknown').toLowerCase();
+
+    switch (safeSeverity) {
       case "low":
         return (
           <Badge variant="secondary" className="bg-blue-100 text-blue-800">
@@ -203,22 +194,48 @@ export default function ReportsPage() {
           </Badge>
         );
       default:
-        return null;
+        return (
+          <Badge variant="secondary" className="bg-gray-100 text-gray-800">
+            Không xác định
+          </Badge>
+        );
     }
   };
 
-  const handleStatusChange = (
-    reportId: number,
-    newStatus: "pending" | "resolved" | "dismissed"
+  const handleStatusChange = async (
+    reportId: string,
+    newStatus: "PENDING" | "RESOLVED" | "REJECTED"
   ) => {
-    setReports((prev) =>
-      prev.map((report) =>
-        report.id === reportId ? { ...report, status: newStatus } : report
-      )
-    );
+    try {
+      setLoading(true);
+      await updateReportStatus(reportId, { newStatus: newStatus });
+      await fetchReports(currentPage, 10, selectedStatus === "all" ? undefined : selectedStatus.toUpperCase());
+      await fetchStatistics();
+    } catch (error) {
+      console.error("Failed to update report status:", error);
+      alert("Không thể cập nhật trạng thái báo cáo");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSelectReport = (reportId: number) => {
+  // NEW: Hàm xử lý xóa báo cáo đơn lẻ
+  const handleIndividualDeleteReport = async (reportId: string) => {
+    try {
+      setLoading(true);
+      await deleteReport(reportId); // Gọi API xóa báo cáo đơn lẻ
+      await fetchReports(currentPage, 10, selectedStatus === "all" ? undefined : selectedStatus.toUpperCase());
+      await fetchStatistics(); // Cập nhật thống kê sau khi xóa
+    } catch (error) {
+      console.error("Failed to delete report:", error);
+      alert("Không thể xóa báo cáo.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
+  const handleSelectReport = (reportId: string) => {
     setSelectedReports((prev) =>
       prev.includes(reportId)
         ? prev.filter((id) => id !== reportId)
@@ -227,63 +244,136 @@ export default function ReportsPage() {
   };
 
   const handleSelectAll = () => {
-    if (selectedReports.length === reports.length) {
+    if (selectedReports.length > 0 && selectedReports.length === filteredReports.length && filteredReports.length > 0) {
       setSelectedReports([]);
     } else {
-      setSelectedReports(reports.map((report) => report.id));
+      setSelectedReports(filteredReports.map((report) => report.id));
     }
   };
 
-  const handleBulkAction = (action: "resolve" | "dismiss" | "ban") => {
-    if (action === "ban") {
-      // Logic to ban users
-      console.log("Banning users for reports:", selectedReports);
-    } else {
-      const newStatus = action === "resolve" ? "resolved" : "dismissed";
-      setReports((prev) =>
-        prev.map((report) =>
-          selectedReports.includes(report.id)
-            ? { ...report, status: newStatus }
-            : report
-        )
-      );
+  const handleBulkAction = async (action: string) => {
+    setLoading(true);
+    try {
+      if (action === "resolve") {
+        await bulkUpdateReportStatus({ reportIds: selectedReports, newStatus: "RESOLVED" });
+        alert(`Đã xử lý ${selectedReports.length} báo cáo.`);
+      } else if (action === "reject") {
+        await bulkUpdateReportStatus({ reportIds: selectedReports, newStatus: "REJECTED" });
+        alert(`Đã bỏ qua ${selectedReports.length} báo cáo.`);
+      } else if (action === "delete") {
+        // Hành động này hiện đang xóa báo cáo. Nếu "Ban tài khoản" là một API riêng, bạn cần gọi API đó ở đây.
+        await bulkDeleteReports(selectedReports); // Xóa báo cáo hàng loạt
+        alert(`Đã xóa ${selectedReports.length} báo cáo.`);
+      }
+      setSelectedReports([]);
+      await fetchReports(currentPage, 10, selectedStatus === "all" ? undefined : selectedStatus.toUpperCase());
+      await fetchStatistics();
+    } catch (error) {
+      console.error(`Failed to perform bulk ${action}:`, error);
+      alert(`Không thể thực hiện hành động ${action}. Chi tiết lỗi: ${(error as Error).message}`);
+    } finally {
+      setLoading(false);
     }
-    setSelectedReports([]);
   };
 
-  const handleViewReport = (report: ReportedUser) => {
+  const handleViewReport = (report: ReportResponse) => {
     setViewingReport(report);
     setIsViewDialogOpen(true);
   };
 
   const filteredReports = reports.filter((report) => {
-    const matchesSearch =
-      report.reportedUser.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      report.reportedBy.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      report.reason.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus =
-      selectedStatus === "all" || report.status === selectedStatus;
-    const matchesSeverity =
-      selectedSeverity === "all" || report.severity === selectedSeverity;
-    const matchesDate =
-      !selectedDate || report.reportDate.includes(selectedDate);
+    const matchesSearch = !searchTerm ||
+      report.reason.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      report.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      report.reportedAccountUsername?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      report.reporterAccountUsername.toLowerCase().includes(searchTerm.toLowerCase());
 
-    return matchesSearch && matchesStatus && matchesSeverity && matchesDate;
+    const matchesStatus = selectedStatus === "all" || report.status === selectedStatus;
+    const matchesType = selectedType === "all" || report.reportType === selectedType;
+    const matchesSeverity = selectedSeverity === "all" || report.severity === selectedSeverity;
+    const matchesDate = !selectedDate || (new Date(report.createdAt).toISOString().split('T')[0] === selectedDate);
+
+    return matchesSearch && matchesStatus && matchesType && matchesSeverity && matchesDate;
   });
 
-  const getStatusCounts = () => {
-    return {
-      total: reports.length,
-      pending: reports.filter((r) => r.status === "pending").length,
-      resolved: reports.filter((r) => r.status === "resolved").length,
-      dismissed: reports.filter((r) => r.status === "dismissed").length,
-    };
+  const statusLabels: { [key: string]: string } = {
+    total: "Tổng báo cáo",
+    pending: "Chờ xử lý",
+    resolved: "Đã xử lý",
+    rejected: "Đã bỏ qua",
   };
 
-  const statusCounts = getStatusCounts();
+  const severityLabels: { [key: string]: string } = {
+    low: "Thấp",
+    medium: "Trung bình",
+    high: "Cao",
+    critical: "Nghiêm trọng",
+  };
+
+  const typeLabels: { [key: string]: string } = {
+    recipe: "Công thức",
+    comment: "Bình luận",
+    user: "Người dùng",
+  };
+
+  const renderPaginationButtons = () => {
+    const buttons = [];
+    buttons.push(
+      <Button
+        key="prev"
+        variant="outline"
+        size="sm"
+        onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))}
+        disabled={currentPage === 0 || loading}
+      >
+        «
+      </Button>
+    );
+
+    let startPage = Math.max(0, currentPage - 2);
+    let endPage = Math.min(totalPages - 1, currentPage + 2);
+
+    if (totalPages <= 5) {
+        startPage = 0;
+        endPage = totalPages - 1;
+    } else if (currentPage <= 2) {
+        startPage = 0;
+        endPage = 4;
+    } else if (currentPage >= totalPages - 3) {
+        startPage = totalPages - 5;
+        endPage = totalPages - 1;
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      buttons.push(
+        <Button
+          key={i}
+          size="sm"
+          onClick={() => setCurrentPage(i)}
+          className={currentPage === i ? "bg-orange-500 text-white" : "variant-outline"}
+          disabled={loading}
+        >
+          {i + 1}
+        </Button>
+      );
+    }
+
+    buttons.push(
+      <Button
+        key="next"
+        variant="outline"
+        size="sm"
+        onClick={() => setCurrentPage(prev => Math.min(totalPages - 1, prev + 1))}
+        disabled={currentPage === totalPages - 1 || loading}
+      >
+        »
+      </Button>
+    );
+    return buttons;
+  };
 
   return (
-    <div>
+    <div className="p-4">
       <Header
         title="Quản lý Báo cáo"
         showSearch={false}
@@ -294,56 +384,24 @@ export default function ReportsPage() {
 
       {/* Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Tổng báo cáo</p>
-                <p className="text-2xl font-bold">{statusCounts.total}</p>
+        {Object.entries(reportStats).slice(0, 4).map(([key, value]) => (
+          <Card key={key}>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600">{statusLabels[key]}</p>
+                  <p className={`text-2xl font-bold ${key === 'pending' ? 'text-yellow-600' : key === 'resolved' ? 'text-green-600' : key === 'rejected' ? 'text-gray-600' : 'text-blue-500'}`}>
+                    {typeof value === "number" ? value : JSON.stringify(value)}
+                  </p>
+                </div>
+                {key === 'total' && <Flag className="w-8 h-8 text-blue-500" />}
+                {key === 'pending' && <Flag className="w-8 h-8 text-yellow-500" />}
+                {key === 'resolved' && <CheckCircle className="w-8 h-8 text-green-500" />}
+                {key === 'rejected' && <X className="w-8 h-8 text-gray-500" />}
               </div>
-              <Flag className="w-8 h-8 text-blue-500" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Chờ xử lý</p>
-                <p className="text-2xl font-bold text-yellow-600">
-                  {statusCounts.pending}
-                </p>
-              </div>
-              <Flag className="w-8 h-8 text-yellow-500" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Đã xử lý</p>
-                <p className="text-2xl font-bold text-green-600">
-                  {statusCounts.resolved}
-                </p>
-              </div>
-              <CheckCircle className="w-8 h-8 text-green-500" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Đã bỏ qua</p>
-                <p className="text-2xl font-bold text-gray-600">
-                  {statusCounts.dismissed}
-                </p>
-              </div>
-              <X className="w-8 h-8 text-gray-500" />
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
       <Card>
@@ -357,6 +415,7 @@ export default function ReportsPage() {
                   variant="outline"
                   onClick={() => handleBulkAction("resolve")}
                   className="text-green-600 border-green-600 hover:bg-green-50"
+                  disabled={loading}
                 >
                   <CheckCircle className="w-4 h-4 mr-1" />
                   Xử lý ({selectedReports.length})
@@ -364,18 +423,54 @@ export default function ReportsPage() {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => handleBulkAction("dismiss")}
+                  onClick={() => handleBulkAction("reject")}
                   className="text-gray-600 border-gray-600 hover:bg-gray-50"
+                  disabled={loading}
                 >
                   <X className="w-4 h-4 mr-1" />
                   Bỏ qua ({selectedReports.length})
                 </Button>
+
+                {/* Nút xóa báo cáo hàng loạt riêng biệt */}
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button
                       size="sm"
                       variant="outline"
                       className="text-red-600 border-red-600 hover:bg-red-50"
+                      disabled={selectedReports.length === 0 || loading}
+                    >
+                      <Trash2 className="w-4 h-4 mr-1" />
+                      Xóa báo cáo ({selectedReports.length})
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Xác nhận xóa báo cáo</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Bạn có chắc chắn muốn xóa {selectedReports.length} báo cáo đã chọn? Hành động này không thể hoàn tác.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Hủy</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => handleBulkAction("delete")} // Gọi hàm xóa hàng loạt
+                        className="bg-red-600 hover:bg-red-700"
+                      >
+                        Xóa
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+
+                {/* Nút "Khóa tài khoản" hiện tại - đã điều chỉnh mô tả */}
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-red-600 border-red-600 hover:bg-red-50"
+                      disabled={selectedReports.length === 0 || loading}
                     >
                       <Ban className="w-4 h-4 mr-1" />
                       Khóa tài khoản ({selectedReports.length})
@@ -384,21 +479,21 @@ export default function ReportsPage() {
                   <AlertDialogContent>
                     <AlertDialogHeader>
                       <AlertDialogTitle>
-                        Xác nhận khóa tài khoản
+                        Xác nhận khóa tài khoản và xóa báo cáo
                       </AlertDialogTitle>
                       <AlertDialogDescription>
-                        Bạn có chắc chắn muốn khóa tài khoản của{" "}
-                        {selectedReports.length} người dùng bị báo cáo? Hành
-                        động này sẽ ngăn họ truy cập vào hệ thống.
+                        Bạn có chắc chắn muốn thực hiện hành động này? Hành động này sẽ **xóa các báo cáo đã chọn** và ngụ ý rằng bạn sẽ **thực hiện việc khóa tài khoản người dùng liên quan một cách riêng biệt** nếu có.
+                        <br />
+                        **Lưu ý: Việc xóa báo cáo không thể hoàn tác.**
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Hủy</AlertDialogCancel>
                       <AlertDialogAction
-                        onClick={() => handleBulkAction("ban")}
+                        onClick={() => handleBulkAction("delete")} // Vẫn gọi hàm xóa báo cáo hàng loạt
                         className="bg-red-600 hover:bg-red-700"
                       >
-                        Khóa tài khoản
+                        Tiếp tục và Xóa Báo cáo
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
@@ -434,9 +529,9 @@ export default function ReportsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tất cả trạng thái</SelectItem>
-                  <SelectItem value="pending">Chờ xử lý</SelectItem>
-                  <SelectItem value="resolved">Đã xử lý</SelectItem>
-                  <SelectItem value="dismissed">Đã bỏ qua</SelectItem>
+                  <SelectItem value="PENDING">Chờ xử lý</SelectItem>
+                  <SelectItem value="RESOLVED">Đã xử lý</SelectItem>
+                  <SelectItem value="REJECTED">Đã bỏ qua</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -453,10 +548,10 @@ export default function ReportsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tất cả mức độ</SelectItem>
-                  <SelectItem value="low">Thấp</SelectItem>
-                  <SelectItem value="medium">Trung bình</SelectItem>
-                  <SelectItem value="high">Cao</SelectItem>
-                  <SelectItem value="critical">Nghiêm trọng</SelectItem>
+                  <SelectItem value="LOW">Thấp</SelectItem>
+                  <SelectItem value="MEDIUM">Trung bình</SelectItem>
+                  <SelectItem value="HIGH">Cao</SelectItem>
+                  <SelectItem value="CRITICAL">Nghiêm trọng</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -471,9 +566,16 @@ export default function ReportsPage() {
               />
             </div>
             <div className="flex items-end">
-              <Button className="w-full" variant="outline">
+              <Button className="w-full" variant="outline" onClick={() => {
+                   fetchReports(
+                    0,
+                    10,
+                    selectedStatus === "all" ? undefined : selectedStatus.toUpperCase(),
+                   );
+                   setCurrentPage(0);
+               }}>
                 <Filter className="w-4 h-4 mr-2" />
-                Lọc
+                Áp dụng bộ lọc
               </Button>
             </div>
           </div>
@@ -487,12 +589,12 @@ export default function ReportsPage() {
                     <input
                       type="checkbox"
                       className="rounded"
-                      checked={selectedReports.length === reports.length}
+                      checked={selectedReports.length > 0 && selectedReports.length === filteredReports.length && filteredReports.length > 0}
                       onChange={handleSelectAll}
                     />
                   </th>
                   <th className="text-left py-3 px-4 font-semibold text-gray-700">
-                    ID
+                    STT
                   </th>
                   <th className="text-left py-3 px-4 font-semibold text-gray-700">
                     Người bị báo cáo
@@ -518,108 +620,140 @@ export default function ReportsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredReports.map((report) => (
-                  <tr
-                    key={report.id}
-                    className="border-b border-gray-100 hover:bg-gray-50"
-                  >
-                    <td className="py-3 px-4">
-                      <input
-                        type="checkbox"
-                        className="rounded"
-                        checked={selectedReports.includes(report.id)}
-                        onChange={() => handleSelectReport(report.id)}
-                      />
-                    </td>
-                    <td className="py-3 px-4 text-gray-600">{report.id}</td>
-                    <td className="py-3 px-4 font-medium">
-                      {report.reportedUser}
-                    </td>
-                    <td className="py-3 px-4 text-gray-600">
-                      {report.reportedBy}
-                    </td>
-                    <td className="py-3 px-4 text-gray-600 max-w-xs">
-                      <div className="truncate" title={report.reason}>
-                        {report.reason}
-                      </div>
-                    </td>
-                    <td className="py-3 px-4">
-                      {getSeverityBadge(report.severity)}
-                    </td>
-                    <td className="py-3 px-4 text-gray-600">
-                      {report.reportDate}
-                    </td>
-                    <td className="py-3 px-4">
-                      {getStatusBadge(report.status)}
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex space-x-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleViewReport(report)}
-                          className="text-blue-600 border-blue-600 hover:bg-blue-50"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                        {report.status === "pending" && (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() =>
-                                handleStatusChange(report.id, "resolved")
-                              }
-                              className="text-green-600 border-green-600 hover:bg-green-50"
-                            >
-                              <CheckCircle className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() =>
-                                handleStatusChange(report.id, "dismissed")
-                              }
-                              className="text-gray-600 border-gray-600 hover:bg-gray-50"
-                            >
-                              <X className="w-4 h-4" />
-                            </Button>
-                          </>
-                        )}
-                      </div>
+                {loading ? (
+                  <tr>
+                    <td colSpan={9} className="text-center py-8 text-gray-500">
+                      Đang tải báo cáo...
                     </td>
                   </tr>
+                ) : filteredReports.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="text-center py-8 text-gray-500">
+                      Không tìm thấy báo cáo nào phù hợp với bộ lọc.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredReports.map((report, index) => (
+                    <tr
+                      key={report.id}
+                      className="border-b border-gray-100 hover:bg-gray-50"
+                    >
+                      <td className="py-3 px-4">
+                        <input
+                          type="checkbox"
+                          className="rounded"
+                          checked={selectedReports.includes(report.id)}
+                          onChange={() => handleSelectReport(report.id)}
+                        />
+                      </td>
+                      <td className="py-3 px-4 text-gray-600">
+                        {currentPage * 10 + index + 1}
+                      </td>
+                      <td className="py-3 px-4 font-medium">
+                        {/* CHỈ HIỂN THỊ TÊN NGƯỜI BỊ BÁO CÁO */}
+                        <p className="font-medium">
+                          {report.reportedAccountUsername || 'Không xác định'}
+                        </p>
+                        {/* Đã bỏ dòng hiển thị email */}
+                      </td>
+                      <td className="py-3 px-4 text-gray-600">{report.reporterAccountUsername || 'N/A'}</td>
+                      <td className="py-3 px-4 text-gray-600 max-w-xs">
+                        <div className="truncate" title={report.reason}>
+                          {report.reason}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        {getSeverityBadge(report.severity)}
+                      </td>
+                      <td className="py-3 px-4 text-gray-600">
+                        {new Date(report.createdAt).toLocaleDateString("vi-VN")}
+                      </td>
+                      <td className="py-3 px-4">
+                        {getStatusBadge(report.status)}
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex space-x-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleViewReport(report)}
+                            className="text-blue-600 border-blue-600 hover:bg-blue-50"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          {report.status.toLowerCase() === "pending" && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  handleStatusChange(report.id, "RESOLVED")
+                                }
+                                className="text-green-600 border-green-600 hover:bg-green-50"
+                                disabled={loading}
+                              >
+                                <CheckCircle className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  handleStatusChange(report.id, "REJECTED")
+                                }
+                                className="text-gray-600 border-gray-600 hover:bg-gray-50"
+                                disabled={loading}
+                              >
+                                <X className="w-4 h-4" />
+                              </Button>
+                            </>
+                          )}
+                          {/* NEW: Nút xóa báo cáo riêng lẻ */}
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-red-600 border-red-600 hover:bg-red-50"
+                                disabled={loading}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Xác nhận xóa báo cáo</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Bạn có chắc chắn muốn xóa báo cáo này? Hành động này không thể hoàn tác.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Hủy</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleIndividualDeleteReport(report.id)}
+                                  className="bg-red-600 hover:bg-red-700"
+                                >
+                                  Xóa
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </td>
+                    </tr>
+                  )
                 ))}
               </tbody>
             </table>
           </div>
 
-          {filteredReports.length === 0 && (
-            <div className="text-center py-8 text-gray-500">
-              Không tìm thấy báo cáo nào phù hợp với bộ lọc.
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex justify-center mt-6">
+              <div className="flex space-x-2">
+                {renderPaginationButtons()}
+              </div>
             </div>
           )}
-
-          {/* Pagination */}
-          <div className="flex justify-center mt-6">
-            <div className="flex space-x-2">
-              <Button variant="outline" size="sm">
-                «
-              </Button>
-              <Button size="sm" className="bg-orange-500 text-white">
-                1
-              </Button>
-              <Button variant="outline" size="sm">
-                2
-              </Button>
-              <Button variant="outline" size="sm">
-                3
-              </Button>
-              <Button variant="outline" size="sm">
-                »
-              </Button>
-            </div>
-          </div>
         </CardContent>
       </Card>
 
@@ -640,23 +774,21 @@ export default function ReportsPage() {
                   <Label className="text-sm font-medium text-gray-700">
                     Người bị báo cáo
                   </Label>
+                  {/* CHỈ HIỂN THỊ TÊN NGƯỜI BỊ BÁO CÁO */}
                   <p className="text-sm text-gray-900 mt-1">
-                    {viewingReport.reportedUser}
+                    { viewingReport.reportedAccountUsername || 'N/A'}
                   </p>
-                  <p className="text-xs text-gray-500">
-                    {viewingReport.userEmail}
-                  </p>
+                  {/* Đã bỏ dòng hiển thị email */}
                 </div>
                 <div>
                   <Label className="text-sm font-medium text-gray-700">
                     Người báo cáo
                   </Label>
+                  {/* CHỈ HIỂN THỊ TÊN NGƯỜI BÁO CÁO */}
                   <p className="text-sm text-gray-900 mt-1">
-                    {viewingReport.reportedBy}
+                    { viewingReport.reporterAccountUsername || 'N/A'}
                   </p>
-                  <p className="text-xs text-gray-500">
-                    {viewingReport.reporterEmail}
-                  </p>
+                  {/* Đã bỏ dòng hiển thị email */}
                 </div>
               </div>
 
@@ -666,7 +798,7 @@ export default function ReportsPage() {
                     Ngày báo cáo
                   </Label>
                   <p className="text-sm text-gray-900 mt-1">
-                    {viewingReport.reportDate}
+                    {new Date(viewingReport.createdAt).toLocaleDateString("vi-VN")}
                   </p>
                 </div>
                 <div>
@@ -688,29 +820,39 @@ export default function ReportsPage() {
                 </p>
               </div>
 
-              <div>
-                <Label className="text-sm font-medium text-gray-700">
-                  Mô tả chi tiết
-                </Label>
-                <p className="text-sm text-gray-900 mt-1">
-                  {viewingReport.description}
-                </p>
-              </div>
-
-              {viewingReport.evidence && (
+              {viewingReport.description && (
                 <div>
                   <Label className="text-sm font-medium text-gray-700">
-                    Bằng chứng
+                    Mô tả chi tiết
                   </Label>
                   <p className="text-sm text-gray-900 mt-1">
-                    {viewingReport.evidence}
+                    {viewingReport.description}
                   </p>
                 </div>
               )}
 
+              {viewingReport.evidenceImageUrl && (
+                <div>
+                  <Label className="text-sm font-medium text-gray-700">
+                    Ảnh/Video bằng chứng
+                  </Label>
+                  <div className="mt-2">
+                    {/* Hiển thị hình ảnh nếu có */}
+                    <img
+                      src={viewingReport.evidenceImageUrl}
+                      alt="Bằng chứng"
+                      className="max-w-[200px] h-auto rounded-md shadow-sm"
+                      onError={(e) => { e.currentTarget.src = 'https://via.placeholder.com/150?text=No+Image'; }} // Fallback nếu ảnh lỗi
+                    />
+                  </div>
+                </div>
+              )}
+
+             
+
               <div>
                 <Label className="text-sm font-medium text-gray-700">
-                  Trạng thái hiện tại
+                  Trạng thái
                 </Label>
                 <div className="mt-1">
                   {getStatusBadge(viewingReport.status)}
@@ -719,35 +861,35 @@ export default function ReportsPage() {
             </div>
           )}
 
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setIsViewDialogOpen(false)}
-            >
+          <DialogFooter className="mt-6 flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>
               Đóng
             </Button>
-            {viewingReport?.status === "pending" && (
-              <div className="flex space-x-2">
+            {viewingReport?.status.toLowerCase() === "pending" && (
+              <>
                 <Button
                   onClick={() => {
-                    handleStatusChange(viewingReport.id, "resolved");
-                    setIsViewDialogOpen(false);
+                    if (viewingReport) {
+                      handleStatusChange(viewingReport.id, "RESOLVED");
+                      setIsViewDialogOpen(false); // Đóng dialog sau khi xử lý
+                    }
                   }}
-                  className="bg-green-600 hover:bg-green-700"
+                  className="bg-green-500 hover:bg-green-600 text-white"
                 >
-                  Xử lý
+                  Đánh dấu Đã xử lý
                 </Button>
                 <Button
                   onClick={() => {
-                    handleStatusChange(viewingReport.id, "dismissed");
-                    setIsViewDialogOpen(false);
+                    if (viewingReport) {
+                      handleStatusChange(viewingReport.id, "REJECTED");
+                      setIsViewDialogOpen(false); // Đóng dialog sau khi xử lý
+                    }
                   }}
-                  variant="outline"
-                  className="text-gray-600 border-gray-600"
+                  className="bg-gray-500 hover:bg-gray-600 text-white"
                 >
-                  Bỏ qua
+                  Đánh dấu Đã bỏ qua
                 </Button>
-              </div>
+              </>
             )}
           </DialogFooter>
         </DialogContent>
