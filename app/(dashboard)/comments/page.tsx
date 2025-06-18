@@ -141,16 +141,16 @@ export default function CommentsPage() {
     fetchCommentReports();
   }, []);
 
-  const fetchTotalReportedCount = async () => {
-    try {
-      const totalReports = await getTotalCommentReports(); // <-- GỌI API MỚI
-      setReportedCount(totalReports); // <-- CẬP NHẬT STATE
-      console.log("Total reported comments from API:", totalReports);
-    } catch (error) {
-      console.error("Failed to fetch total reported comments:", error);
-      setReportedCount(0);
-    }
-  };
+  const fetchTotalReportedCount = async (): Promise<number> => {
+      try {
+        const totalReports = await getTotalCommentReports(); // <-- GỌI API MỚI
+        console.log("Total reported comments from API:", totalReports);
+        return totalReports;
+      } catch (error) {
+        console.error("Failed to fetch total reported comments:", error);
+        return 0;
+      }
+    };
 
   const handleLogout = () => {
     console.log("Đăng xuất thành công");
@@ -309,7 +309,8 @@ export default function CommentsPage() {
     try {
       // Lấy từ reports API
       const reportStats = await fetchTotalReportedCount();
-      setReportedCount(reportStats);
+      const reportStatsValue = await fetchTotalReportedCount();
+      setReportedCount(reportStatsValue);
 
       // Hoặc lấy từ comments API
       const allCommentsResponse = await getAllComments(0, 1000);
