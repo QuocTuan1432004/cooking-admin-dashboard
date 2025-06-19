@@ -1,153 +1,98 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Header } from "@/components/ui/header"
 import { useRouter } from "next/navigation"
 import type { Recipe } from "@/components/recipe-detail-modal"
 import { RecipeManagementAdvanced } from "@/components/recipe-management-advanced"
 import { IngredientEditModal } from "@/components/ingredient-edit-modal"
 import { IngredientDeleteModal } from "@/components/ingredient-delete-modal"
-import type { Ingredient } from "@/hooks/RecipeApi/recipeTypes"
+import type { Ingredient, RecipeResponse } from "@/hooks/RecipeApi/recipeTypes"
+import { getAllRecipe, changeRecipeStatus, deleteRecipe } from "@/hooks/RecipeApi/recipeApi"
 
 export default function RecipesPage() {
   const router = useRouter()
   const [unreadNotifications] = useState(3)
   const [isIngredientEditOpen, setIsIngredientEditOpen] = useState(false)
   const [isIngredientDeleteOpen, setIsIngredientDeleteOpen] = useState(false)
+  const [recipes, setRecipes] = useState<Recipe[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
+  const [totalElements, setTotalElements] = useState(0)
+  const pageSize = 5
 
-  // Sample ingredients data - in real app, this would come from API
-  const [ingredients] = useState<Ingredient[]>([
-    // { id: "1", ingredientName: "Thịt heo" },
-    // { id: "2", ingredientName: "Gà ta" },
-    // { id: "3", ingredientName: "Cá bông lau" },
-    // { id: "4", ingredientName: "Rau muống" },
-    // { id: "5", ingredientName: "Đậu xanh" },
-    // { id: "6", ingredientName: "Gừng tươi" },
-    // { id: "7", ingredientName: "Hành tím" },
-    // { id: "8", ingredientName: "Tỏi" },
-    // { id: "9", ingredientName: "Nước mắm" },
-    // { id: "10", ingredientName: "Đường" },
-  ])
+  // Load recipes from API
+  useEffect(() => {
+    loadRecipes()
+  }, [currentPage])
 
-  const [recipes, setRecipes] = useState<Recipe[]>([
-    {
-      id: 1,
-      name: "Gà kho gừng",
-      category: "Món kho",
-      author: "Nguyễn Văn A",
-      date: "16/05/2025",
-      image: "/placeholder.svg?height=60&width=60",
-      status: "approved",
-      rating: 4.5,
-      views: 1250,
-      description: "Món gà kho gừng thơm ngon, đậm đà hương vị truyền thống Việt Nam",
-      ingredients: [
-        "1 con gà ta (khoảng 1.5kg)",
-        "100g gừng tươi",
-        "3 củ hành tím",
-        "2 muỗng canh nước mắm",
-        "1 muỗng canh đường",
-        "1 muỗng cà phê tiêu",
-        "Dầu ăn, muối",
-      ],
-      instructions: [
-        "Sơ chế gà: Rửa sạch, chặt miếng vừa ăn",
-        "Gừng cạo vỏ, thái lát mỏng. Hành tím bóc vỏ, băm nhỏ",
-        "Ướp gà với nước mắm, đường, tiêu trong 30 phút",
-        "Làm nóng dầu, phi thơm hành tím và gừng",
-        "Cho gà vào xào săn, đổ nước vừa ngập",
-        "Nêm nếm gia vị, kho lửa nhỏ 45 phút đến khi thịt mềm",
-      ],
-      cookingTime: "1 giờ 15 phút",
-      servings: 4,
-    },
-    {
-      id: 2,
-      name: "Canh chua cá",
-      category: "Món canh",
-      author: "Trần Thị B",
-      date: "15/05/2025",
-      image: "/placeholder.svg?height=60&width=60",
-      status: "approved",
-      rating: 4.2,
-      views: 980,
-      description: "Canh chua cá bông lau thanh mát, chua ngọt đậm đà",
-      ingredients: [
-        "500g cá bông lau",
-        "200g dứa",
-        "100g đậu bắp",
-        "50g giá đỗ",
-        "2 quả cà chua",
-        "Me chua, nước mắm, đường",
-      ],
-      instructions: [
-        "Sơ chế cá, thái khúc",
-        "Dứa thái múi cau, cà chua thái múi",
-        "Nấu nước me chua",
-        "Cho cá vào nấu, nêm nếm",
-        "Thêm rau củ, nấu chín tắt bếp",
-      ],
-      cookingTime: "30 phút",
-      servings: 3,
-    },
-    {
-      id: 3,
-      name: "Bánh flan",
-      category: "Món tráng miệng",
-      author: "Lê Văn C",
-      date: "15/05/2025",
-      image: "/placeholder.svg?height=60&width=60",
-      status: "approved",
-      rating: 4.8,
-      views: 1500,
-      description: "Bánh flan mềm mịn, thơm ngon với lớp caramel đậm đà",
-      ingredients: ["4 quả trứng gà", "400ml sữa tươi", "80g đường", "1 tsp vanilla"],
-      instructions: [
-        "Làm caramel với đường",
-        "Đánh trứng với sữa",
-        "Lọc hỗn hợp, đổ vào khuôn",
-        "Hấp 25 phút",
-        "Để nguội rồi tách khuôn",
-      ],
-      cookingTime: "45 phút",
-      servings: 6,
-    },
-    {
-      id: 4,
-      name: "Chè đậu xanh",
-      category: "Món tráng miệng",
-      author: "Phạm Thị D",
-      date: "14/05/2025",
-      image: "/placeholder.svg?height=60&width=60",
-      status: "pending",
-      rating: 0,
-      views: 0,
-      description: "Chè đậu xanh mát lành, bổ dưỡng",
-      ingredients: ["200g đậu xanh", "100g đường", "400ml nước cốt dừa"],
-      instructions: ["Nấu đậu xanh", "Thêm đường", "Chan nước cốt dừa"],
-      cookingTime: "40 phút",
-      servings: 4,
-    },
-    {
-      id: 5,
-      name: "Rau muống xào tỏi",
-      category: "Món xào",
-      author: "Hoàng Văn E",
-      date: "14/05/2025",
-      image: "/placeholder.svg?height=60&width=60",
-      status: "rejected",
-      rating: 0,
-      views: 0,
-      description: "Rau muống xào tỏi giòn ngon, đơn giản",
-      ingredients: ["500g rau muống", "3 tép tỏi", "Nước mắm, dầu ăn"],
-      instructions: ["Nhặt rau muống", "Phi tỏi", "Xào rau nhanh tay"],
-      cookingTime: "10 phút",
-      servings: 2,
-    },
-  ])
+  const loadRecipes = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const response = await getAllRecipe(currentPage, pageSize)
+      const apiRecipes = response.result.content
+      
+      // Convert API response to local Recipe format
+      const convertedRecipes: Recipe[] = apiRecipes.map((apiRecipe: RecipeResponse) => ({
+        id: apiRecipe.id,  // Giữ nguyên là string, không parseInt
+        name: apiRecipe.title,
+        category: apiRecipe.subCategoryName || "Không xác định",
+        author: apiRecipe.accountName || "Không xác định",
+        date: new Date(apiRecipe.createAt).toLocaleDateString("vi-VN"),
+        image: apiRecipe.image || "/placeholder.svg?height=60&width=60",
+        status: apiRecipe.status,
+        rating: 0,
+        views: parseInt(apiRecipe.totalLikes?.toString() || "0"),
+        description: apiRecipe.description,
+        ingredients: [],
+        instructions: [],
+        cookingTime: apiRecipe.cookingTime,
+        servings: 4,
+      }))
+  
+      console.log("Converted Recipes:", convertedRecipes)
+      setRecipes(convertedRecipes)
+      setTotalPages(response.result.totalPages)
+      setTotalElements(response.result.totalElements)
+    } catch (error) {
+      setError("Không thể tải danh sách công thức")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleStatusChange = async (recipeId: string) => {  // Thay đổi từ number thành string
+    try {
+      setLoading(true)
+      await changeRecipeStatus(recipeId)
+      
+      // Reload recipes to get updated status
+      await loadRecipes()
+    } catch (error) {
+      setError("Không thể thay đổi trạng thái công thức")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDeleteRecipe = async (recipeId: string) => {  // Thay đổi từ number thành string
+    try {
+      setLoading(true)
+      await deleteRecipe(recipeId)
+      
+      // Reload recipes after deletion
+      await loadRecipes()
+    } catch (error) {
+      setError("Không thể xóa công thức")
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleLogout = () => {
-    console.log("Đăng xuất thành công")
     localStorage.removeItem("auth_token")
     router.push("/login")
   }
@@ -159,15 +104,21 @@ export default function RecipesPage() {
   }
 
   const handleIngredientEdit = (updatedIngredients: string[]) => {
-    // In a real app, you would update the ingredients in the database
-    console.log("Updated ingredients:", updatedIngredients)
-    // You could also update recipes that use these ingredients
+    // Ingredients are managed separately via IngredientEditModal's API calls
+    // No need to do anything here as the modal handles API calls internally
   }
 
   const handleIngredientDelete = (updatedIngredients: string[]) => {
-    // In a real app, you would delete ingredients from the database
-    console.log("Remaining ingredients after deletion:", updatedIngredients)
-    // You could also update recipes that use the deleted ingredients
+    // Ingredients are managed separately via IngredientDeleteModal's API calls
+    // No need to do anything here as the modal handles API calls internally
+  }
+
+  const handleRecipeUpdate = (updatedRecipes: Recipe[]) => {
+    setRecipes(updatedRecipes)
+  }
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
   }
 
   return (
@@ -181,18 +132,45 @@ export default function RecipesPage() {
           notificationCount={unreadNotifications}
         />
 
+        {/* Error Message */}
+        {error && (
+          <div className="mx-6 mt-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+            {error}
+            <button 
+              onClick={() => setError(null)}
+              className="float-right text-red-700 hover:text-red-900"
+            >
+              ×
+            </button>
+          </div>
+        )}
+
+        {/* Loading State */}
+        {loading && (
+          <div className="flex justify-center items-center py-8">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <span className="ml-2 text-gray-600">Đang tải công thức...</span>
+          </div>
+        )}
+
         <RecipeManagementAdvanced
           recipes={recipes}
-          onRecipeUpdate={setRecipes}
+          onRecipeUpdate={handleRecipeUpdate}
           showApprovalActions={true}
           showFilters={true}
           showStats={true}
           showBulkActions={true}
-          title="Danh sách công thức"
+          title={`Danh sách công thức (${totalElements} công thức)`}
           onAddRecipe={() => router.push("/recipes/create")}
-          // Add ingredient management actions
           onEditIngredients={() => setIsIngredientEditOpen(true)}
           onDeleteIngredients={() => setIsIngredientDeleteOpen(true)}
+          // API pagination props
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={handlePageChange}
+          // API action handlers
+          onStatusChange={handleStatusChange}
+          onDeleteRecipe={handleDeleteRecipe}
         />
       </div>
 
@@ -202,7 +180,6 @@ export default function RecipesPage() {
         onClose={() => setIsIngredientEditOpen(false)}
         ingredients={getAllIngredientsFromRecipes()}
         onSave={handleIngredientEdit}
-        // availableIngredients={ingredients}
       />
 
       {/* Ingredient Delete Modal */}

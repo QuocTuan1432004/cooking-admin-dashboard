@@ -26,6 +26,12 @@ interface RecipeManagementAdvancedProps {
   onAddRecipe?: () => void
   onEditIngredients?: () => void
   onDeleteIngredients?: () => void
+  // Cập nhật props để sử dụng string
+  currentPage?: number
+  totalPages?: number
+  onPageChange?: (page: number) => void
+  onStatusChange?: (recipeId: string) => void  // Thay đổi từ number thành string
+  onDeleteRecipe?: (recipeId: string) => void  // Thay đổi từ number thành string
 }
 
 export function RecipeManagementAdvanced({
@@ -39,6 +45,11 @@ export function RecipeManagementAdvanced({
   onAddRecipe,
   onEditIngredients,
   onDeleteIngredients,
+  currentPage: propCurrentPage,
+  totalPages: propTotalPages,
+  onPageChange: propOnPageChange,
+  onStatusChange,
+  onDeleteRecipe: propOnDeleteRecipe,
 }: RecipeManagementAdvancedProps) {
   // Filter states
   const [searchTerm, setSearchTerm] = useState("")
@@ -53,28 +64,29 @@ export function RecipeManagementAdvanced({
   const [isIngredientModalOpen, setIsIngredientModalOpen] = useState(false)
 
   // Bulk actions
-  const [selectedIds, setSelectedIds] = useState<number[]>([])
+  const [selectedIds, setSelectedIds] = useState<string[]>([])  // Thay đổi từ number[] thành string[]
 
-  // Pagination
-  const [currentPage, setCurrentPage] = useState(1)
+  // Local pagination (chỉ sử dụng khi không có API pagination)
+  const [localCurrentPage, setLocalCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
 
-  // Ingredients state
-  const [ingredients, setIngredients] = useState<Ingredient[]>([
-    // { id: 1, name: "Thịt heo", calories: 250 },
-    // { id: 2, name: "Cà chua", calories: 18 },
-    // { id: 3, name: "Hành tây", calories: 40 },
-    // { id: 4, name: "Gạo tẻ", calories: 365 },
-    // { id: 5, name: "Dầu ăn", calories: 884 },
-    // { id: 6, name: "Gà ta", calories: 239 },
-    // { id: 7, name: "Gừng tươi", calories: 80 },
-    // { id: 8, name: "Nước mắm", calories: 10 },
-    // { id: 9, name: "Đường trắng", calories: 387 },
-    // { id: 10, name: "Tiêu đen", calories: 251 },
-  ])
+  // Sử dụng API pagination nếu có, ngược lại dùng local pagination
+  const currentPage = propCurrentPage !== undefined ? propCurrentPage + 1 : localCurrentPage // API pagination bắt đầu từ 0
+  const totalPages = propTotalPages || Math.ceil(recipes.length / pageSize)
+  const onPageChange = propOnPageChange
+    ? (page: number) => propOnPageChange(page - 1) // Convert về 0-based cho API
+    : setLocalCurrentPage
 
-  // Filter recipes
+  // Ingredients state
+  const [ingredients, setIngredients] = useState<Ingredient[]>([])
+
+  // Filter recipes (chỉ khi không có API pagination)
   const filteredRecipes = useMemo(() => {
+    if (propCurrentPage !== undefined) {
+      // Nếu có API pagination, return recipes as is
+      return recipes
+    }
+
     return recipes.filter((recipe) => {
       const matchesSearch =
         recipe.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -85,19 +97,26 @@ export function RecipeManagementAdvanced({
 
       return matchesSearch && matchesCategory && matchesStatus && matchesDate
     })
-  }, [recipes, searchTerm, selectedCategory, selectedStatus, selectedDate])
+  }, [recipes, searchTerm, selectedCategory, selectedStatus, selectedDate, propCurrentPage])
 
-  // Paginate recipes
+  // Paginate recipes (chỉ khi không có API pagination)
   const paginatedRecipes = useMemo(() => {
-    const startIndex = (currentPage - 1) * pageSize
-    return filteredRecipes.slice(startIndex, startIndex + pageSize)
-  }, [filteredRecipes, currentPage, pageSize])
+    if (propCurrentPage !== undefined) {
+      // Nếu có API pagination, return recipes as is
+      return recipes
+    }
 
-  const totalPages = Math.ceil(filteredRecipes.length / pageSize)
+    const startIndex = (localCurrentPage - 1) * pageSize
+    return filteredRecipes.slice(startIndex, startIndex + pageSize)
+  }, [filteredRecipes, localCurrentPage, pageSize, recipes, propCurrentPage])
 
   // Reset pagination when filters change
   const handleFilterChange = () => {
-    setCurrentPage(1)
+    if (propOnPageChange) {
+      propOnPageChange(0) // Reset về page 0 cho API
+    } else {
+      setLocalCurrentPage(1)
+    }
     setSelectedIds([])
   }
 
@@ -116,27 +135,45 @@ export function RecipeManagementAdvanced({
     onRecipeUpdate(updatedRecipes)
   }
 
-  const handleDeleteRecipe = (recipeId: number) => {
-    const updatedRecipes = recipes.filter((recipe) => recipe.id !== recipeId)
-    onRecipeUpdate(updatedRecipes)
+  const handleDeleteRecipe = (recipeId: string) => {  // Thay đổi từ number thành string
+    if (propOnDeleteRecipe) {
+      // Sử dụng API delete
+      propOnDeleteRecipe(recipeId)
+    } else {
+      // Local delete
+      const updatedRecipes = recipes.filter((recipe) => recipe.id !== recipeId)
+      onRecipeUpdate(updatedRecipes)
+    }
     setSelectedIds(selectedIds.filter((id) => id !== recipeId))
   }
 
-  const handleApproveRecipe = (recipeId: number) => {
-    const updatedRecipes = recipes.map((recipe) =>
-      recipe.id === recipeId ? { ...recipe, status: "approved" as const } : recipe,
-    )
-    onRecipeUpdate(updatedRecipes)
+  const handleApproveRecipe = (recipeId: string) => {  // Thay đổi từ number thành string
+    if (onStatusChange) {
+      // Sử dụng API status change
+      onStatusChange(recipeId)
+    } else {
+      // Local update với status mới
+      const updatedRecipes = recipes.map((recipe) =>
+        recipe.id === recipeId ? { ...recipe, status: "APPROVED" } : recipe,
+      )
+      onRecipeUpdate(updatedRecipes)
+    }
   }
 
-  const handleRejectRecipe = (recipeId: number, reason: string) => {
-    const updatedRecipes = recipes.map((recipe) =>
-      recipe.id === recipeId ? { ...recipe, status: "rejected" as const } : recipe,
-    )
-    onRecipeUpdate(updatedRecipes)
+  const handleRejectRecipe = (recipeId: string, reason: string) => {  // Thay đổi từ number thành string
+    if (onStatusChange) {
+      // Sử dụng API status change
+      onStatusChange(recipeId)
+    } else {
+      // Local update với status mới
+      const updatedRecipes = recipes.map((recipe) =>
+        recipe.id === recipeId ? { ...recipe, status: "NOT_APPROVED" } : recipe,
+      )
+      onRecipeUpdate(updatedRecipes)
+    }
   }
 
-  const handleBulkAction = (action: string, ids: number[]) => {
+  const handleBulkAction = (action: string, ids: string[]) => {  // Thay đổi từ number[] thành string[]
     let updatedRecipes = [...recipes]
 
     switch (action) {
@@ -145,17 +182,18 @@ export function RecipeManagementAdvanced({
         break
       case "approve":
         updatedRecipes = recipes.map((recipe) =>
-          ids.includes(recipe.id) ? { ...recipe, status: "approved" as const } : recipe,
+          ids.includes(recipe.id) ? { ...recipe, status: "APPROVED" } : recipe,
         )
         break
       case "reject":
         updatedRecipes = recipes.map((recipe) =>
-          ids.includes(recipe.id) ? { ...recipe, status: "rejected" as const } : recipe,
+          ids.includes(recipe.id) ? { ...recipe, status: "NOT_APPROVED" } : recipe,
         )
         break
     }
 
     onRecipeUpdate(updatedRecipes)
+    setSelectedIds([]) // Clear selection after bulk action
   }
 
   const handleAddIngredient = (newIngredient: Omit<Ingredient, "id">) => {
@@ -164,7 +202,6 @@ export function RecipeManagementAdvanced({
       id: (Math.max(...ingredients.map((i) => Number(i.id) || 0), 0) + 1).toString(),
     }
     setIngredients([...ingredients, ingredient])
-    console.log("Đã thêm nguyên liệu:", ingredient)
   }
 
   const getUniqueCategories = () => {
@@ -244,11 +281,15 @@ export function RecipeManagementAdvanced({
             currentPage={currentPage}
             totalPages={totalPages}
             pageSize={pageSize}
-            totalItems={filteredRecipes.length}
-            onPageChange={setCurrentPage}
+            totalItems={propCurrentPage !== undefined ? recipes.length : filteredRecipes.length}
+            onPageChange={onPageChange}
             onPageSizeChange={(size) => {
               setPageSize(size)
-              setCurrentPage(1)
+              if (propOnPageChange) {
+                propOnPageChange(0) // Reset về page 0 cho API
+              } else {
+                setLocalCurrentPage(1)
+              }
             }}
           />
         </CardContent>

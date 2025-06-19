@@ -299,15 +299,15 @@ export default function CreateRecipePage() {
         }
 
       // Summary
-      const successMessage = `
-        Công thức đã được tạo thành công!
+      // const successMessage = `
+      //   Công thức đã được tạo thành công!
         
-        📋 Recipe ID: ${recipeId}
-        🥕 Nguyên liệu: ${ingredientResults.length}/${validIngredients.length}
-        📝 Bước làm: ${stepResults.length}/${validInstructions.length}
-      `
+      //   📋 Recipe ID: ${recipeId}
+      //   🥕 Nguyên liệu: ${ingredientResults.length}/${validIngredients.length}
+      //   📝 Bước làm: ${stepResults.length}/${validInstructions.length}
+      // `
 
-      alert(successMessage)
+      // alert(successMessage)
       router.push("/recipes")
 
     } catch (error) {

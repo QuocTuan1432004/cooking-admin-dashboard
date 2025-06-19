@@ -24,9 +24,9 @@ import type { Recipe } from "./recipe-detail-modal";
 
 interface RecipeBulkActionsProps {
   recipes: Recipe[];
-  selectedIds: number[];
-  onSelectionChange: (ids: number[]) => void;
-  onBulkAction: (action: string, ids: number[]) => void;
+  selectedIds: string[];
+  onSelectionChange: (ids: string[]) => void;
+  onBulkAction: (action: string, ids: string[]) => void;
 }
 
 export function RecipeBulkActions({

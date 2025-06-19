@@ -37,6 +37,13 @@ export function RecipeFilters({
   categories,
   onFilter,
 }: RecipeFiltersProps) {
+  const statusOptions = [
+    { value: "all", label: "Tất cả trạng thái" },
+    { value: "APPROVED", label: "Đã duyệt" },
+    { value: "PENDING", label: "Chờ duyệt" },
+    { value: "NOT_APPROVED", label: "Từ chối" },
+  ];
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
       <div>
@@ -82,10 +89,11 @@ export function RecipeFilters({
             <SelectValue placeholder="Tất cả trạng thái" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Tất cả trạng thái</SelectItem>
-            <SelectItem value="approved">Đã duyệt</SelectItem>
-            <SelectItem value="pending">Chờ duyệt</SelectItem>
-            <SelectItem value="rejected">Bị từ chối</SelectItem>
+            {statusOptions.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>

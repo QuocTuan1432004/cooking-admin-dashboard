@@ -273,7 +273,7 @@ export function IngredientEditModal({
                   <div className="grid grid-cols-11 gap-4 px-4 py-3 bg-gray-50 rounded-lg font-medium text-gray-700">
                     <div className="col-span-1">#</div>
                     <div className="col-span-5">Tên nguyên liệu</div>
-                    <div className="col-span-2">Calo/Đơn vị</div>
+                    <div className="col-span-2">Calo</div>
                     <div className="col-span-2">Đơn vị đo</div>
                     <div className="col-span-1">Thao tác</div>
                   </div>

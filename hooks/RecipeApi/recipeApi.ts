@@ -50,7 +50,7 @@ const formData = new FormData()
 }
 
 export const getAllRecipe = async (page: number, size: number): Promise<ApiResponse<PageResponse<RecipeResponse>>> => {
-  const response = await authenticatedFetch(`${API_BASE_URL}/recipes?page=${page}&size=${size}`)
+  const response = await authenticatedFetch(`${API_BASE_URL}/recipe/getAll?page=${page}&size=${size}`)
 
   const result: ApiResponse<PageResponse<RecipeResponse>> = await handleResponse(response)
   return result

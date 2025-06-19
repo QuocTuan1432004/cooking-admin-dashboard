@@ -26,7 +26,7 @@ export interface RecipeResponse {
   id: string
   title: string
   description: string
-  img?: string
+  image?: string
   cookingTime: string
   difficulty: string
   totalLikes: number
