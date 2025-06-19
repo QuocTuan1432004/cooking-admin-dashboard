@@ -41,6 +41,8 @@ export interface Recipe {
   servings?: number
   rating?: number
   views?: number
+  difficulty?: string
+  subcategoryId?: string
 }
 
 interface RecipeDetailModalProps {

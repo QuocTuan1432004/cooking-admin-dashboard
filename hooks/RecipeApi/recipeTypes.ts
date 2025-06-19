@@ -90,6 +90,8 @@ export interface RecipeIngredientsResponse {
   id: string
   recipeName: string
   ingredientName: string
+  unit: string
+  ingredientId: string
   quantity: number
 }
 

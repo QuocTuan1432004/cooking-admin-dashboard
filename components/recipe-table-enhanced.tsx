@@ -334,26 +334,28 @@ export function RecipeTableEnhanced({
               <AlertTriangle className="h-5 w-5 text-red-500" />
               Xác nhận xóa công thức
             </AlertDialogTitle>
-            <AlertDialogDescription>
-              Bạn có chắc chắn muốn xóa công thức{" "}
-              <span className="font-semibold text-red-600">
-                "{getRecipeToDelete()?.name}"
-              </span>{" "}
-              không?
-              <br />
-              <br />
-              <span className="text-red-500 font-medium">
-                ⚠️ Hành động này không thể hoàn tác!
-              </span>
-              <br />
-              Tất cả dữ liệu liên quan đến công thức này sẽ bị xóa vĩnh viễn, bao gồm:
-              <ul className="mt-2 space-y-1 text-sm">
-                <li>• Thông tin công thức</li>
-                <li>• Danh sách nguyên liệu</li>
-                <li>• Các bước hướng dẫn</li>
-                <li>• Hình ảnh đính kèm</li>
-                <li>• Đánh giá và bình luận</li>
-              </ul>
+            <AlertDialogDescription asChild>
+              <div className="text-sm text-muted-foreground">
+                Bạn có chắc chắn muốn xóa công thức{" "}
+                <span className="font-semibold text-red-600">
+                  "{getRecipeToDelete()?.name}"
+                </span>{" "}
+                không?
+                <br />
+                <br />
+                <span className="text-red-500 font-medium">
+                  ⚠️ Hành động này không thể hoàn tác!
+                </span>
+                <br />
+                Tất cả dữ liệu liên quan đến công thức này sẽ bị xóa vĩnh viễn, bao gồm:
+                <ul className="mt-2 space-y-1 text-sm">
+                  <li>• Thông tin công thức</li>
+                  <li>• Danh sách nguyên liệu</li>
+                  <li>• Các bước hướng dẫn</li>
+                  <li>• Hình ảnh đính kèm</li>
+                  <li>• Đánh giá và bình luận</li>
+                </ul>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
