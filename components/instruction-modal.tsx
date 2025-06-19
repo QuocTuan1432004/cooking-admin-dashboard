@@ -10,13 +10,6 @@ import { Label } from "@/components/ui/label"
 import { Clock, Upload, Save, X, Plus, Edit, Trash2, ArrowUp, ArrowDown } from "lucide-react"
 import Image from "next/image"
 
-interface InstructionModalProps {
-  isOpen: boolean
-  onClose: () => void
-  instructions: string[]
-  onSave: (instructions: string[]) => void
-}
-
 interface DetailedInstruction {
   step: number
   description: string
@@ -25,8 +18,22 @@ interface DetailedInstruction {
   imageFile?: File
 }
 
-export function InstructionModal({ isOpen, onClose, instructions, onSave }: InstructionModalProps) {
-  const [detailedInstructions, setDetailedInstructions] = useState<DetailedInstruction[]>([])
+interface InstructionModalProps {
+  isOpen: boolean
+  onClose: () => void
+  instructions?: string[] // Để tương thích với code cũ
+  detailedInstructions?: DetailedInstruction[] // Thêm prop mới
+  onSave: (instructions: DetailedInstruction[]) => void // Thay đổi type
+}
+
+export function InstructionModal({
+  isOpen,
+  onClose,
+  instructions = [],
+  detailedInstructions = [],
+  onSave,
+}: InstructionModalProps) {
+  const [localDetailedInstructions, setLocalDetailedInstructions] = useState<DetailedInstruction[]>([])
   const [isAddingNew, setIsAddingNew] = useState(false)
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [newInstruction, setNewInstruction] = useState<DetailedInstruction>({
@@ -37,25 +44,48 @@ export function InstructionModal({ isOpen, onClose, instructions, onSave }: Inst
   })
   const [dragActive, setDragActive] = useState(false)
 
-  // Initialize detailed instructions from simple string array
+  // Initialize detailed instructions
   useEffect(() => {
     if (isOpen) {
-      if (instructions.length > 0) {
+      // Ưu tiên sử dụng detailedInstructions nếu có
+      if (detailedInstructions.length > 0) {
+        // Chỉ update nếu khác với current state
+        if (JSON.stringify(localDetailedInstructions) !== JSON.stringify(detailedInstructions)) {
+          setLocalDetailedInstructions([...detailedInstructions])
+        }
+      } else if (instructions.length > 0) {
+        // Fallback cho code cũ
         const detailed = instructions.map((instruction, index) => ({
           step: index + 1,
           description: instruction,
           time: "",
           image: "",
         }))
-        setDetailedInstructions(detailed)
-      } else {
-        setDetailedInstructions([])
+        // Chỉ update nếu khác với current state
+        if (JSON.stringify(localDetailedInstructions) !== JSON.stringify(detailed)) {
+          setLocalDetailedInstructions(detailed)
+        }
+      } else if (localDetailedInstructions.length > 0) {
+        setLocalDetailedInstructions([])
       }
-      setIsAddingNew(false)
-      setEditingIndex(null)
-      setNewInstruction({ step: 1, description: "", time: "", image: "" })
+
+      // Reset các state khác chỉ khi cần thiết
+      if (isAddingNew) setIsAddingNew(false)
+      if (editingIndex !== null) setEditingIndex(null)
+
+      // Reset newInstruction
+      setNewInstruction({ step: localDetailedInstructions.length + 1, description: "", time: "", image: "" })
     }
-  }, [isOpen, instructions])
+  }, [isOpen]) // Chỉ depend vào isOpen
+
+  // Separate useEffect for detailedInstructions changes
+  useEffect(() => {
+    if (isOpen && detailedInstructions.length > 0) {
+      if (JSON.stringify(localDetailedInstructions) !== JSON.stringify(detailedInstructions)) {
+        setLocalDetailedInstructions([...detailedInstructions])
+      }
+    }
+  }, [detailedInstructions, isOpen])
 
   const handleImageUpload = (file: File, isNew = false) => {
     if (file && file.type.startsWith("image/")) {
@@ -69,13 +99,13 @@ export function InstructionModal({ isOpen, onClose, instructions, onSave }: Inst
             imageFile: file,
           }))
         } else if (editingIndex !== null) {
-          const updated = [...detailedInstructions]
+          const updated = [...localDetailedInstructions]
           updated[editingIndex] = {
             ...updated[editingIndex],
             image: result,
             imageFile: file,
           }
-          setDetailedInstructions(updated)
+          setLocalDetailedInstructions(updated)
         }
       }
       reader.readAsDataURL(file)
@@ -105,7 +135,7 @@ export function InstructionModal({ isOpen, onClose, instructions, onSave }: Inst
     setIsAddingNew(true)
     setEditingIndex(null)
     setNewInstruction({
-      step: detailedInstructions.length + 1,
+      step: localDetailedInstructions.length + 1,
       description: "",
       time: "",
       image: "",
@@ -115,8 +145,8 @@ export function InstructionModal({ isOpen, onClose, instructions, onSave }: Inst
   const handleSaveNew = () => {
     if (!newInstruction.description.trim()) return
 
-    const updated = [...detailedInstructions, { ...newInstruction, step: detailedInstructions.length + 1 }]
-    setDetailedInstructions(updated)
+    const updated = [...localDetailedInstructions, { ...newInstruction, step: localDetailedInstructions.length + 1 }]
+    setLocalDetailedInstructions(updated)
     setIsAddingNew(false)
     setNewInstruction({ step: 1, description: "", time: "", image: "" })
   }
@@ -140,44 +170,42 @@ export function InstructionModal({ isOpen, onClose, instructions, onSave }: Inst
   }
 
   const handleDelete = (index: number) => {
-    const updated = detailedInstructions.filter((_, i) => i !== index)
+    const updated = localDetailedInstructions.filter((_, i) => i !== index)
     // Re-number steps
     const renumbered = updated.map((inst, i) => ({ ...inst, step: i + 1 }))
-    setDetailedInstructions(renumbered)
+    setLocalDetailedInstructions(renumbered)
   }
 
   const handleMoveUp = (index: number) => {
     if (index > 0) {
-      const updated = [...detailedInstructions]
+      const updated = [...localDetailedInstructions]
       ;[updated[index - 1], updated[index]] = [updated[index], updated[index - 1]]
       // Re-number steps
       const renumbered = updated.map((inst, i) => ({ ...inst, step: i + 1 }))
-      setDetailedInstructions(renumbered)
+      setLocalDetailedInstructions(renumbered)
     }
   }
 
   const handleMoveDown = (index: number) => {
-    if (index < detailedInstructions.length - 1) {
-      const updated = [...detailedInstructions]
+    if (index < localDetailedInstructions.length - 1) {
+      const updated = [...localDetailedInstructions]
       ;[updated[index], updated[index + 1]] = [updated[index + 1], updated[index]]
       // Re-number steps
       const renumbered = updated.map((inst, i) => ({ ...inst, step: i + 1 }))
-      setDetailedInstructions(renumbered)
+      setLocalDetailedInstructions(renumbered)
     }
   }
 
   const handleSaveAll = () => {
-    // Convert detailed instructions back to simple string array
-    const finalInstructions = detailedInstructions
-      .filter((inst) => inst.description.trim())
-      .map((inst) => inst.description)
+    // Trả về detailed instructions thay vì chỉ string array
+    const finalInstructions = localDetailedInstructions.filter((inst) => inst.description.trim())
 
     onSave(finalInstructions)
     onClose()
   }
 
   const handleCancel = () => {
-    setDetailedInstructions([])
+    setLocalDetailedInstructions([])
     setIsAddingNew(false)
     setEditingIndex(null)
     setNewInstruction({ step: 1, description: "", time: "", image: "" })
@@ -185,15 +213,15 @@ export function InstructionModal({ isOpen, onClose, instructions, onSave }: Inst
   }
 
   const updateInstruction = (index: number, field: keyof DetailedInstruction, value: string) => {
-    const updated = [...detailedInstructions]
+    const updated = [...localDetailedInstructions]
     updated[index] = { ...updated[index], [field]: value }
-    setDetailedInstructions(updated)
+    setLocalDetailedInstructions(updated)
   }
 
   const removeImage = (index: number) => {
-    const updated = [...detailedInstructions]
+    const updated = [...localDetailedInstructions]
     updated[index] = { ...updated[index], image: "", imageFile: undefined }
-    setDetailedInstructions(updated)
+    setLocalDetailedInstructions(updated)
   }
 
   return (
@@ -225,7 +253,7 @@ export function InstructionModal({ isOpen, onClose, instructions, onSave }: Inst
 
           {/* Existing Instructions */}
           <div className="space-y-4">
-            {detailedInstructions.map((instruction, index) => (
+            {localDetailedInstructions.map((instruction, index) => (
               <div key={index} className="border rounded-lg p-4 bg-gray-50">
                 {editingIndex === index ? (
                   // Edit Mode
@@ -369,7 +397,7 @@ export function InstructionModal({ isOpen, onClose, instructions, onSave }: Inst
                           size="sm"
                           variant="outline"
                           onClick={() => handleMoveDown(index)}
-                          disabled={index === detailedInstructions.length - 1}
+                          disabled={index === localDetailedInstructions.length - 1}
                           className="px-2"
                         >
                           <ArrowDown className="w-3 h-3" />
@@ -511,7 +539,7 @@ export function InstructionModal({ isOpen, onClose, instructions, onSave }: Inst
           )}
 
           {/* Empty State */}
-          {detailedInstructions.length === 0 && !isAddingNew && (
+          {localDetailedInstructions.length === 0 && !isAddingNew && (
             <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-lg">
               <div className="text-4xl mb-4">📝</div>
               <h3 className="text-lg font-medium text-gray-900 mb-2">Chưa có hướng dẫn nào</h3>

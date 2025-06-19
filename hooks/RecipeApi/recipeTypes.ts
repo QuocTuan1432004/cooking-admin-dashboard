@@ -113,7 +113,7 @@ export interface RecipeSteps {
   recipe: Recipe
   description: string
   waitingTime?: string
-  recipeStepsImg?: string
+  recipeStepImage?: string
 }
 
 export interface RecipeStepsResponse {
@@ -122,7 +122,7 @@ export interface RecipeStepsResponse {
   recipeName: string
   description: string
   waitingTime?: string
-  recipeStepsImg?: string
+  recipeStepImage?: string
 }
 
 export interface RecipeStepsCreationRequest {
