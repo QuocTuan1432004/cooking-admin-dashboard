@@ -410,7 +410,14 @@ export function RecipeEditModalImproved({ recipe, isOpen, onClose, onSave }: Rec
 
   const updateEditingRecipe = (field: keyof Recipe, value: any) => {
     if (editingRecipe) {
-      setEditingRecipe((prev) => (prev ? { ...prev, [field]: value } : null))
+      setEditingRecipe((prev) => {
+        if (!prev) return null;
+        const updated = { ...prev, [field]: value };
+        console.log('Updating recipe field:', field, 'with value:', value);
+        console.log('Updated recipe:', updated);
+        return updated;
+      });
+      
       // Xóa lỗi khi user bắt đầu sửa
       if (errors[field]) {
         setErrors((prev) => ({ ...prev, [field]: "" }))
@@ -913,7 +920,18 @@ export function RecipeEditModalImproved({ recipe, isOpen, onClose, onSave }: Rec
         isOpen={isInstructionModalOpen}
         onClose={() => setIsInstructionModalOpen(false)}
         instructions={editingRecipe?.instructions || []}
-        onSave={(instructions) => updateEditingRecipe("instructions", instructions)}
+        onSave={(instructions) => {
+          console.log('Saving instructions from modal:', instructions);
+          updateEditingRecipe("instructions", instructions);
+          
+          // Clear validation error if exists
+          if (errors.instructions) {
+            setErrors(prev => ({ ...prev, instructions: '' }));
+          }
+          
+          // Close modal after saving
+          setIsInstructionModalOpen(false);
+        }}
       />
     </>
   )
