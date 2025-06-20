@@ -1,9 +1,7 @@
 import { authenticatedFetch } from "@/hooks/userAuth";
 import { MainCategory, SubCategory, Category } from "@/hooks/categoryApi/types";
-import { get } from "http";
 
 const API_BASE_URL = 'http://localhost:8080';
-
 
 const handleResponse = async (response: Response) => {
   if (!response.ok) {
@@ -31,60 +29,66 @@ const mapMainCategoryToCategory = async (main: MainCategory): Promise<Category> 
     id: main.id,
     name: main.categoryName,
     description: '', // Backend không trả về description, đặt mặc định
-    recipeCount, // Lấy từ API
     children: [],
+    image: main.categoryImg || '/placeholder.svg?height=60&width=60', // Thêm mapping cho ảnh
   };
 };
 
-
 const mapSubCategoryToCategory = async (sub: SubCategory): Promise<Category> => {
-    
   const recipeCount = await countRecipeBySubCategory(sub.id);
   return {
     id: sub.id,
     name: sub.subCategoryName,
     parentId: sub.categoryId,
     image: sub.subCategoryImg || '/placeholder.svg?height=60&width=60',
-    recipeCount, // Lấy từ API
   };
 };
 
 //Main Category API
-export const createMainCategory = async (data: { categoryName: string; }) => {
+export const createMainCategory = async (data: { categoryName: string; }, file?: File) => {
+  const formData = new FormData();
+  formData.append('categoryName', data.categoryName);
+  if (file) formData.append('file', file);
+
   const response = await authenticatedFetch(`${API_BASE_URL}/mainCategory/create`, {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: formData,
   });
   const result = await handleResponse(response);
   return mapMainCategoryToCategory(result.result);
 };
 
-export const updateMainCategory = async (id: string, data: { categoryName: string; }) => {
+export const updateMainCategory = async (id: string, data: { categoryName: string; }, file?: File) => {
+  const formData = new FormData();
+  formData.append('categoryName', data.categoryName);
+  if (file) formData.append('file', file);
+
   const response = await authenticatedFetch(`${API_BASE_URL}/mainCategory/update/${id}`, {
     method: 'PUT',
-    body: JSON.stringify(data),
+    body: formData,
   });
   const result = await handleResponse(response);
   return mapMainCategoryToCategory(result.result);
 };
 
 export const getAllMainCategories = async (): Promise<Category[]> => {
-    const response = await authenticatedFetch(`${API_BASE_URL}/mainCategory/getAll`);
-    const result = await handleResponse(response);
-    const mainCategories: MainCategory[] = result.result;
-    const categories = await Promise.all(
-        mainCategories.map(async (main) => {
-            const mainCategory = await mapMainCategoryToCategory(main);
-            const subrRespone = await getSubCategoriesByMainId(main.id);
-            const subCategories = await Promise.all(
-                subrRespone.map(mapSubCategoryToCategory));
-            return{
-                ...mainCategory,
-                children: subCategories,
-            };
-        })
-    );
-    return categories;
+  const response = await authenticatedFetch(`${API_BASE_URL}/mainCategory/getAll`);
+  const result = await handleResponse(response);
+  const mainCategories: MainCategory[] = result.result;
+  const categories = await Promise.all(
+    mainCategories.map(async (main) => {
+      const mainCategory = await mapMainCategoryToCategory(main);
+      const subResponse = await getSubCategoriesByMainId(main.id);
+      const subCategories = await Promise.all(
+        subResponse.map(mapSubCategoryToCategory)
+      );
+      return {
+        ...mainCategory,
+        children: subCategories,
+      };
+    })
+  );
+  return categories;
 };
 
 export const deleteMainCategory = async (id: string) => {

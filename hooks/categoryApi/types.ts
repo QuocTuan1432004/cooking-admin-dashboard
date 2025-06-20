@@ -2,6 +2,7 @@
 export interface MainCategory {
   id: string;
   categoryName: string;
+  categoryImg?: string; // Optional, not always present
 }
 
 export interface SubCategory {
@@ -17,6 +18,5 @@ export interface Category {
   description?: string; // Only for main categories (not in entity, but kept for compatibility)
   parentId?: string; // Maps to mainCategory.id for subcategories
   children?: Category[]; // Subcategories
-  recipeCount: number; // Not in backend entities, assumed from API or default to 0
   image?: string; // Maps to subCategoryImg for subcategories
 }

@@ -54,8 +54,8 @@ export const getRecipeIngredientsByRecipeId = async (recipeId: string): Promise<
 }
 
 // Delete Recipe Ingredient
-export const deleteRecipeIngredient = async (recipeId: string, ingredientId: string): Promise<string> => {
-  const response = await authenticatedFetch(`${API_BASE_URL}/recipeIngredients/delete/${recipeId}/${ingredientId}`, {
+export const deleteRecipeIngredient = async (ingredientId: string): Promise<string> => {
+  const response = await authenticatedFetch(`${API_BASE_URL}/recipeIngredients/delete/${ingredientId}`, {
     method: "DELETE",
   })
 

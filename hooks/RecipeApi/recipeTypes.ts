@@ -26,7 +26,7 @@ export interface RecipeResponse {
   id: string
   title: string
   description: string
-  img?: string
+  image?: string
   cookingTime: string
   difficulty: string
   totalLikes: number
@@ -55,23 +55,27 @@ export interface RecipeUpdateRequest {
 export interface Ingredient {
   id: string
   ingredientName: string
+  measurementUnit: string
   caloriesPerUnit: string
 }
 
 export interface IngredientsResponse {
   id: string
   ingredientName: string
+  measurementUnit: string
   caloriesPerUnit: string
 }
 
 export interface IngredientsCreationRequest {
   ingredientName: string
   caloriesPerUnit: string
+  measurementUnit?: string
 }
 
 export interface IngredientsUpdateRequest {
   ingredientName: string
   caloriesPerUnit: string
+  measurementUnit?: string
 }
 
 // Recipe Ingredients Types
@@ -86,6 +90,8 @@ export interface RecipeIngredientsResponse {
   id: string
   recipeName: string
   ingredientName: string
+  unit: string
+  ingredientId: string
   quantity: number
 }
 
@@ -107,7 +113,7 @@ export interface RecipeSteps {
   recipe: Recipe
   description: string
   waitingTime?: string
-  recipeStepsImg?: string
+  recipeStepImage?: string
 }
 
 export interface RecipeStepsResponse {
@@ -116,7 +122,7 @@ export interface RecipeStepsResponse {
   recipeName: string
   description: string
   waitingTime?: string
-  recipeStepsImg?: string
+  recipeStepImage?: string
 }
 
 export interface RecipeStepsCreationRequest {

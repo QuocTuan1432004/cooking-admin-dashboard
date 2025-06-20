@@ -5,25 +5,45 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Save } from "lucide-react"
-
-export interface Ingredient {
-  id: number
-  name: string
-  calories: number
-}
+import { createIngredient } from "@/hooks/RecipeApi/ingredientsApi"
+import type { Ingredient, IngredientsCreationRequest } from "@/hooks/RecipeApi/recipeTypes"
 
 interface IngredientAddModalProps {
   isOpen: boolean
   onClose: () => void
-  onSave: (ingredient: Omit<Ingredient, "id">) => void
+  onSave: (ingredient: Ingredient) => void
 }
 
 export function IngredientAddModal({ isOpen, onClose, onSave }: IngredientAddModalProps) {
   const [name, setName] = useState("")
   const [calories, setCalories] = useState("")
+  const [unit, setUnit] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
+const units = [
+  { value: "g", label: "g (gram)" },
+  { value: "kg", label: "kg (kilogram)" },
+  { value: "ml", label: "ml (mililít)" },
+  { value: "l", label: "l (lít)" },
+  { value: "muỗng canh", label: "muỗng canh" },
+  { value: "muỗng cà phê", label: "muỗng cà phê" },
+  { value: "chén", label: "chén" },
+  { value: "bát", label: "bát" },
+  { value: "củ", label: "củ" },
+  { value: "quả", label: "quả" },
+  { value: "con", label: "con" },
+  { value: "lá", label: "lá" },
+  { value: "cây", label: "cây" },
+  { value: "miếng", label: "miếng" },
+  { value: "lát", label: "lát" },
+  { value: "thìa", label: "thìa" },
+  { value: "tô", label: "tô" },
+  { value: "lon", label: "lon" },
+  { value: "chai", label: "chai" },
+]
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {}
 
@@ -37,30 +57,51 @@ export function IngredientAddModal({ isOpen, onClose, onSave }: IngredientAddMod
       newErrors.calories = "Số calo phải là số dương"
     }
 
+    if (!unit) {
+      newErrors.unit = "Vui lòng chọn đơn vị tính"
+    }
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!validateForm()) {
       return
     }
 
-    onSave({
-      name: name.trim(),
-      calories: Number(calories),
-    })
+    setIsLoading(true)
+    
+    try {
+      const ingredientData: IngredientsCreationRequest = {
+        ingredientName: name.trim(),
+        caloriesPerUnit: calories.trim(),
+        measurementUnit: unit.trim(),
+      }
 
-    // Reset form
-    setName("")
-    setCalories("")
-    setErrors({})
-    onClose()
+      const response = await createIngredient(ingredientData)
+      onSave(response)
+
+      // Reset form và đóng modal
+      setName("")
+      setCalories("")
+      setUnit("")
+      setErrors({})
+      onClose()
+    } catch (error) {
+      console.error('Error creating ingredient:', error)
+      setErrors({ 
+        submit: error instanceof Error ? error.message : 'Có lỗi xảy ra khi tạo nguyên liệu' 
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleCancel = () => {
     setName("")
     setCalories("")
+    setUnit("")
     setErrors({})
     onClose()
   }
@@ -70,6 +111,8 @@ export function IngredientAddModal({ isOpen, onClose, onSave }: IngredientAddMod
       setName(value)
     } else if (field === "calories") {
       setCalories(value)
+    } else if (field === "unit") {
+      setUnit(value)
     }
 
     // Xóa lỗi khi user bắt đầu nhập
@@ -80,60 +123,111 @@ export function IngredientAddModal({ isOpen, onClose, onSave }: IngredientAddMod
 
   return (
     <Dialog open={isOpen} onOpenChange={() => {}}>
-      <DialogContent className="max-w-md [&>button]:hidden">
+      <DialogContent className="max-w-lg [&>button]:hidden">
         <DialogHeader>
-          <DialogTitle className="flex items-center justify-between">
-            <span>Thêm nguyên liệu mới</span>
-            <div className="flex gap-2">
-              <Button size="sm" onClick={handleSave} className="bg-green-500 hover:bg-green-600">
-                <Save className="w-4 h-4 mr-2" />
-                Lưu
-              </Button>
-              <Button size="sm" variant="outline" onClick={handleCancel}>
-                Hủy
-              </Button>
-            </div>
+          <DialogTitle className="text-lg font-semibold text-gray-800">
+            Thêm nguyên liệu mới
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-6">
+          {/* Tên nguyên liệu */}
           <div>
-            <Label className="text-sm font-medium">
+            <Label className="text-sm font-medium text-gray-700">
               Tên nguyên liệu <span className="text-red-500">*</span>
             </Label>
             <Input
               value={name}
               onChange={(e) => handleInputChange("name", e.target.value)}
-              className={`mt-1 ${errors.name ? "border-red-500" : ""}`}
+              className={`mt-2 ${errors.name ? "border-red-500 focus:border-red-500" : "border-gray-300 focus:border-blue-500"}`}
               placeholder="VD: Thịt heo, Cà chua, Hành tây..."
+              disabled={isLoading}
             />
             {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
           </div>
 
-          <div>
-            <Label className="text-sm font-medium">
-              Số calo (trên 100g) <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              type="number"
-              min="0"
-              step="0.1"
-              value={calories}
-              onChange={(e) => handleInputChange("calories", e.target.value)}
-              className={`mt-1 ${errors.calories ? "border-red-500" : ""}`}
-              placeholder="VD: 250"
-            />
-            {errors.calories && <p className="text-red-500 text-sm mt-1">{errors.calories}</p>}
-            <p className="text-gray-500 text-xs mt-1">Nhập số calo trên 100g nguyên liệu</p>
+          {/* Grid cho Calories và Unit */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Số calo */}
+            <div>
+              <Label className="text-sm font-medium text-gray-700">
+                Số calo <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                type="number"
+                min="0"
+                step="0.1"
+                value={calories}
+                onChange={(e) => handleInputChange("calories", e.target.value)}
+                className={`mt-2 ${errors.calories ? "border-red-500 focus:border-red-500" : "border-gray-300 focus:border-blue-500"}`}
+                placeholder="250"
+                disabled={isLoading}
+              />
+              {errors.calories && <p className="text-red-500 text-sm mt-1">{errors.calories}</p>}
+            </div>
+
+            {/* Đơn vị tính */}
+            <div>
+              <Label className="text-sm font-medium text-gray-700">
+                Đơn vị tính <span className="text-red-500">*</span>
+              </Label>
+              <Select 
+                value={unit} 
+                onValueChange={(value) => handleInputChange("unit", value)}
+                disabled={isLoading}
+              >
+                <SelectTrigger className={`mt-2 ${errors.unit ? "border-red-500" : "border-gray-300"}`}>
+                  <SelectValue placeholder="Chọn đơn vị" />
+                </SelectTrigger>
+                <SelectContent>
+                  {units.map((unitOption) => (
+                    <SelectItem key={unitOption.value} value={unitOption.value}>
+                      {unitOption.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.unit && <p className="text-red-500 text-sm mt-1">{errors.unit}</p>}
+            </div>
           </div>
 
-          <div className="bg-blue-50 p-3 rounded-lg">
-            <h4 className="font-medium text-blue-800 mb-2">Lưu ý:</h4>
+          {/* Thông tin bổ sung */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <h4 className="font-medium text-blue-800 mb-2 flex items-center">
+              💡 Hướng dẫn
+            </h4>
             <ul className="text-sm text-blue-700 space-y-1">
-              <li>• Tên nguyên liệu nên rõ ràng và dễ hiểu</li>
-              <li>• Số calo được tính trên 100g nguyên liệu</li>
-              <li>• Thông tin này sẽ được sử dụng để tính toán dinh dưỡng</li>
+              <li>• <strong>Tên nguyên liệu:</strong> Nên rõ ràng và dễ hiểu</li>
+              <li>• <strong>Số calo:</strong> Tính theo đơn vị đã chọn</li>
+              <li>• <strong>Đơn vị tính:</strong> Chọn đơn vị phù hợp với nguyên liệu</li>
             </ul>
+          </div>
+
+          {/* Hiển thị lỗi khi submit */}
+          {errors.submit && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+              <p className="text-red-800 text-sm font-medium">❌ {errors.submit}</p>
+            </div>
+          )}
+
+          {/* Action buttons */}
+          <div className="flex justify-end space-x-3 pt-4 border-t">
+            <Button 
+              variant="outline" 
+              onClick={handleCancel}
+              disabled={isLoading}
+              className="px-6"
+            >
+              Hủy
+            </Button>
+            <Button 
+              onClick={handleSave} 
+              disabled={isLoading}
+              className="bg-green-500 hover:bg-green-600 px-6"
+            >
+              <Save className="w-4 h-4 mr-2" />
+              {isLoading ? "Đang lưu..." : "Lưu"}
+            </Button>
           </div>
         </div>
       </DialogContent>
