@@ -28,10 +28,14 @@ import { getRecipeIngredientsByRecipeId } from "@/hooks/RecipeApi/recipeIngredie
 
 export interface Recipe {
   id: string
-  name: string
-  category: string
-  author: string
-  date: string
+  title: string // Thay đổi từ name thành title
+  name?: string // Giữ lại để backward compatibility
+  category?: string // Giữ lại để backward compatibility
+  subCategoryName?: string // Thêm trường này
+  author?: string // Giữ lại để backward compatibility
+  accountName?: string // Thêm trường này
+  date?: string
+  createAt?: string // Thêm trường này
   image?: string
   status: string
   description?: string
@@ -43,6 +47,9 @@ export interface Recipe {
   views?: number
   difficulty?: string
   subcategoryId?: string
+  subCategoryId?: string // Thêm trường này để khớp với backend
+  accountId?: string // Thêm trường này
+  totalLikes?: string // Thêm trường này
 }
 
 interface RecipeDetailModalProps {
@@ -107,6 +114,20 @@ export function RecipeDetailModal({
     }
   }
 
+  // Function to convert difficulty from English to Vietnamese
+  const getDifficultyLabel = (difficulty?: string) => {
+    switch (difficulty?.toLowerCase()) {
+      case "easy":
+        return "Dễ"
+      case "medium":
+        return "Trung bình"
+      case "hard":
+        return "Khó"
+      default:
+        return difficulty || "Chưa có thông tin"
+    }
+  }
+
   if (!recipe) return null
 
   const handleApprove = () => {
@@ -136,6 +157,8 @@ export function RecipeDetailModal({
         return <Badge variant="outline">{status}</Badge>
     }
   }
+
+  // const difficultyInfo = getDifficultyInfo(recipe.difficulty)
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -197,7 +220,11 @@ export function RecipeDetailModal({
                     <Label className="text-sm font-medium text-gray-700">
                       Tên công thức <span className="text-red-500">*</span>
                     </Label>
-                    <Input value={recipe.name || ""} readOnly className="mt-1 bg-gray-50 text-gray-900" />
+                    <Input
+                      value={recipe.title || recipe.name || ""}
+                      readOnly
+                      className="mt-1 bg-gray-50 text-gray-900"
+                    />
                   </div>
 
                   {/* Danh mục và Tác giả - 2 cột với chiều cao bằng nhau */}
@@ -207,27 +234,41 @@ export function RecipeDetailModal({
                         Danh mục <span className="text-red-500">*</span>
                       </Label>
                       <div className="mt-1 p-3 bg-gray-50 border rounded-md flex-1 flex items-center">
-                        <span className="text-gray-700">{recipe.category || "Không xác định"}</span>
+                        <span className="text-gray-700">
+                          {recipe.subCategoryName || recipe.category || "Không xác định"}
+                        </span>
                       </div>
                     </div>
                     <div className="flex flex-col">
                       <Label className="text-sm font-medium text-gray-700">Tác giả</Label>
-                      <Input 
-                        value={recipe.author || ""} 
-                        readOnly 
-                        className="mt-1 bg-gray-50 text-gray-700 flex-1" 
+                      <Input
+                        value={recipe.accountName || recipe.author || ""}
+                        readOnly
+                        className="mt-1 bg-gray-50 text-gray-700 flex-1"
                       />
                     </div>
                   </div>
-                  {/* Thời gian nấu - full width */}
-                  <div>
-                    <Label className="text-sm font-medium text-gray-700">Thời gian nấu</Label>
-                    <Input
-                      value={recipe.cookingTime || ""}
-                      readOnly
-                      className="mt-1 bg-gray-50 text-gray-600"
-                      placeholder="Chưa có thông tin"
-                    />
+
+                  {/* Thời gian nấu và Độ khó - 2 cột */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex flex-col">
+                      <Label className="text-sm font-medium text-gray-700">Thời gian nấu</Label>
+                      <Input
+                        value={recipe.cookingTime || ""}
+                        readOnly
+                        className="mt-1 bg-gray-50 text-gray-600"
+                        placeholder="Chưa có thông tin"
+                      />
+                    </div>
+                    <div className="flex flex-col">
+                      <Label className="text-sm font-medium text-gray-700">Độ khó</Label>
+                      <Input
+                        value={getDifficultyLabel(recipe.difficulty)}
+                        readOnly
+                        className="mt-1 bg-gray-50 text-gray-600"
+                        placeholder="Chưa có thông tin"
+                      />
+                    </div>
                   </div>
 
                   {/* Mô tả - full width */}
@@ -321,10 +362,10 @@ export function RecipeDetailModal({
                           </div>
                         )}
 
-                        {step.recipeStepsImg && (
+                        {step.recipeStepImage && (
                           <div className="mt-3">
                             <img
-                              src={step.recipeStepsImg || "/placeholder.svg"}
+                              src={step.recipeStepImage || "/placeholder.svg"}
                               alt={`Bước ${step.step}`}
                               className="max-w-sm h-40 object-cover rounded-lg border shadow-sm"
                               onError={(e) => {

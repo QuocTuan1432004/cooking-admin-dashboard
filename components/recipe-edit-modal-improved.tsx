@@ -21,7 +21,7 @@ import {
   createRecipeIngredient,
   deleteRecipeIngredient,
 } from "@/hooks/RecipeApi/recipeIngredients"
-import { getRecipeStepsByRecipeId, createRecipeStep, deleteRecipeStep } from "@/hooks/RecipeApi/recipeSteps"
+import { getRecipeStepsByRecipeId, createRecipeStep, deleteRecipeStep, updateRecipeStep } from "@/hooks/RecipeApi/recipeSteps"
 import { getAllMainCategories, getSubCategoriesByMainId } from "@/hooks/categoryApi/categoryApi"
 import { getAllIngredients } from "@/hooks/RecipeApi/ingredientsApi"
 
@@ -33,6 +33,7 @@ import type {
   RecipeUpdateRequest,
   RecipeIngredientsCreationRequest,
   RecipeStepsCreationRequest,
+  RecipeStepsUpdateRequest,
 } from "@/hooks/RecipeApi/recipeTypes"
 import type { Category, SubCategory } from "@/hooks/categoryApi/types"
 
@@ -205,7 +206,7 @@ export function RecipeEditModalImproved({ recipe, isOpen, onClose, onSave }: Rec
             const matchingSubCategory = subCategoriesData.find(
               (sub) =>
                 sub.subCategoryName === editingRecipe.category ||
-                sub.subCategoryName.toLowerCase() === editingRecipe.category.toLowerCase(),
+                (editingRecipe.category && sub.subCategoryName.toLowerCase() === editingRecipe.category.toLowerCase()),
             )
 
             if (matchingSubCategory) {
@@ -357,7 +358,7 @@ export function RecipeEditModalImproved({ recipe, isOpen, onClose, onSave }: Rec
 
       // Prepare update data
       const updateData: RecipeUpdateRequest = {
-        title: editingRecipe.name,
+        title: editingRecipe.name || "",
         description: editingRecipe.description || "",
         difficulty: editingRecipe.difficulty || "Easy",
         cookingTime: editingRecipe.cookingTime || "",
@@ -389,28 +390,79 @@ export function RecipeEditModalImproved({ recipe, isOpen, onClose, onSave }: Rec
     }
   }
 
-  // Hàm mới để update recipe steps với ảnh
-  const updateRecipeStepsWithImages = async (recipeId: string, instructions: DetailedInstruction[]) => {
-    try {
-      // Delete existing steps
-      for (const step of recipeSteps) {
-        await deleteRecipeStep(step.id)
+  // Thêm hàm helper để xử lý ảnh
+  const preserveExistingImages = (instructions: DetailedInstruction[]) => {
+    return instructions.map((instruction) => {
+      // Nếu có imageFile mới, ưu tiên sử dụng
+      if (instruction.imageFile) {
+        return instruction
       }
 
-      // Create new steps với ảnh
-      for (let i = 0; i < instructions.length; i++) {
-        const instruction = instructions[i]
-        if (instruction.description.trim()) {
-          const stepData: RecipeStepsCreationRequest = {
-            step: i + 1,
-            description: instruction.description,
-            waitingTime: instruction.time || "",
-          }
-
-          // Gửi kèm file ảnh nếu có
-          await createRecipeStep(recipeId, stepData, instruction.imageFile)
+      // Nếu có image URL từ server và không có imageFile, giữ nguyên
+      if (instruction.image && !instruction.image.startsWith("data:")) {
+        return {
+          ...instruction,
+          // Đánh dấu để không xóa ảnh này
+          preserveExistingImage: true,
         }
       }
+
+      return instruction
+    })
+  }
+
+  const updateRecipeStepsWithImages = async (recipeId: string, instructions: DetailedInstruction[]) => {
+    try {
+      const processedInstructions = preserveExistingImages(instructions)
+
+      // Lấy tất cả steps hiện tại
+      const currentSteps = [...recipeSteps].sort((a, b) => a.step - b.step)
+      
+      // Xử lý từng instruction
+      for (let i = 0; i < processedInstructions.length; i++) {
+        const instruction = processedInstructions[i]
+        const stepNumber = i + 1
+        const existingStep = currentSteps.find(step => step.step === stepNumber)
+        
+        if (instruction.description.trim()) {
+          
+          if (existingStep) {
+            // Update existing step
+            console.log(`Updating step ${stepNumber}`)
+            
+            const updateData: RecipeStepsUpdateRequest = {
+              step: stepNumber,
+              description: instruction.description,
+              waitingTime: instruction.time || "",
+            }
+            
+            // Chỉ gửi file nếu có ảnh mới
+            const imageToSend = instruction.imageFile || undefined
+            await updateRecipeStep(recipeId, stepNumber, updateData, imageToSend)
+            
+          } else {
+            // Create new step
+            console.log(`Creating step ${stepNumber}`)
+            
+            const createData: RecipeStepsCreationRequest = {
+              step: stepNumber,
+              description: instruction.description,
+              waitingTime: instruction.time || "",
+            }
+            
+            const imageToSend = instruction.imageFile || undefined
+            await createRecipeStep(recipeId, createData, imageToSend)
+          }
+        }
+      }
+      
+      // Xóa các steps thừa (nếu có)
+      const stepsToDelete = currentSteps.filter(step => step.step > processedInstructions.length)
+      for (const step of stepsToDelete) {
+        console.log(`Deleting excess step ${step.step}`)
+        await deleteRecipeStep(step.id)
+      }
+      
     } catch (error) {
       console.error("Error updating steps with images:", error)
       throw error

@@ -7,7 +7,7 @@ import type { Recipe } from "@/components/recipe-detail-modal"
 import { RecipeManagementAdvanced } from "@/components/recipe-management-advanced"
 import { IngredientEditModal } from "@/components/ingredient-edit-modal"
 import { IngredientDeleteModal } from "@/components/ingredient-delete-modal"
-import type { Ingredient, RecipeResponse } from "@/hooks/RecipeApi/recipeTypes"
+import type { RecipeResponse } from "@/hooks/RecipeApi/recipeTypes"
 import { getAllRecipe, changeRecipeStatus, deleteRecipe } from "@/hooks/RecipeApi/recipeApi"
 
 export default function RecipesPage() {
@@ -34,25 +34,27 @@ export default function RecipesPage() {
       setError(null)
       const response = await getAllRecipe(currentPage, pageSize)
       const apiRecipes = response.result.content
-      
+
       // Convert API response to local Recipe format
       const convertedRecipes: Recipe[] = apiRecipes.map((apiRecipe: RecipeResponse) => ({
-        id: apiRecipe.id,  // Giữ nguyên là string, không parseInt
+        id: apiRecipe.id,
         name: apiRecipe.title,
+        title: apiRecipe.title,
         category: apiRecipe.subCategoryName || "Không xác định",
         author: apiRecipe.accountName || "Không xác định",
         date: new Date(apiRecipe.createAt).toLocaleDateString("vi-VN"),
         image: apiRecipe.image || "/placeholder.svg?height=60&width=60",
         status: apiRecipe.status,
         rating: 0,
-        views: parseInt(apiRecipe.totalLikes?.toString() || "0"),
+        views: Number.parseInt(apiRecipe.totalLikes?.toString() || "0"),
         description: apiRecipe.description,
+        difficulty: apiRecipe.difficulty, // THÊM DÒNG NÀY
         ingredients: [],
         instructions: [],
         cookingTime: apiRecipe.cookingTime,
         servings: 4,
       }))
-  
+
       console.log("Converted Recipes:", convertedRecipes)
       setRecipes(convertedRecipes)
       setTotalPages(response.result.totalPages)
@@ -64,11 +66,12 @@ export default function RecipesPage() {
     }
   }
 
-  const handleStatusChange = async (recipeId: string) => {  // Thay đổi từ number thành string
+  const handleStatusChange = async (recipeId: string) => {
+    // Thay đổi từ number thành string
     try {
       setLoading(true)
       await changeRecipeStatus(recipeId)
-      
+
       // Reload recipes to get updated status
       await loadRecipes()
     } catch (error) {
@@ -78,11 +81,12 @@ export default function RecipesPage() {
     }
   }
 
-  const handleDeleteRecipe = async (recipeId: string) => {  // Thay đổi từ number thành string
+  const handleDeleteRecipe = async (recipeId: string) => {
+    // Thay đổi từ number thành string
     try {
       setLoading(true)
       await deleteRecipe(recipeId)
-      
+
       // Reload recipes after deletion
       await loadRecipes()
     } catch (error) {
@@ -136,10 +140,7 @@ export default function RecipesPage() {
         {error && (
           <div className="mx-6 mt-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
             {error}
-            <button 
-              onClick={() => setError(null)}
-              className="float-right text-red-700 hover:text-red-900"
-            >
+            <button onClick={() => setError(null)} className="float-right text-red-700 hover:text-red-900">
               ×
             </button>
           </div>
@@ -157,9 +158,9 @@ export default function RecipesPage() {
           recipes={recipes}
           onRecipeUpdate={handleRecipeUpdate}
           showApprovalActions={true}
-          showFilters={true}
-          showStats={true}
-          showBulkActions={true}
+          showFilters={false} // Thay đổi từ true thành false để ẩn bộ lọc
+          showStats={false} // Thay đổi từ true thành false để ẩn stats (đánh giá TB, tổng lượt xem)
+          showBulkActions={false} // Thay đổi từ true thành false để ẩn bulk actions (chọn tất cả)
           title={`Danh sách công thức (${totalElements} công thức)`}
           onAddRecipe={() => router.push("/recipes/create")}
           onEditIngredients={() => setIsIngredientEditOpen(true)}
