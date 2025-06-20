@@ -21,7 +21,7 @@ import {
   ReportResponse,
   bulkUpdateReportStatus,
   bulkDeleteReports,
-} from "../../../hooks/reportedApi/reportedApi"; // Đảm bảo đường dẫn đúng
+} from "../../../hooks/reportedApi/reportedApi";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -64,18 +64,29 @@ export default function ReportsPage() {
     bySeverity: { low: 0, medium: 0, high: 0, critical: 0 },
   });
 
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedStatus, setSelectedStatus] = useState("all");
-  const [selectedSeverity, setSelectedSeverity] = useState("all");
-  const [selectedType, setSelectedType] = useState("all");
-  const [selectedDate, setSelectedDate] = useState("");
+  // Filter states
+  const [tempSearchTerm, setTempSearchTerm] = useState("");
+  const [tempSelectedStatus, setTempSelectedStatus] = useState("all");
+  const [tempSelectedSeverity, setTempSelectedSeverity] = useState("all");
+  const [tempSelectedType, setTempSelectedType] = useState("all");
+  const [tempSelectedDate, setTempSelectedDate] = useState("");
+  const [appliedSearchTerm, setAppliedSearchTerm] = useState("");
+  const [appliedSelectedStatus, setAppliedSelectedStatus] = useState("all");
+  const [appliedSelectedSeverity, setAppliedSelectedSeverity] = useState("all");
+  const [appliedSelectedType, setAppliedSelectedType] = useState("all");
+  const [appliedSelectedDate, setAppliedSelectedDate] = useState("");
+
   const [viewingReport, setViewingReport] = useState<ReportResponse | null>(null);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
 
-  const fetchReports = useCallback(async (page = 0, size = 10, status?: string) => {
+  const fetchReports = useCallback(async (page = 0, size = 10) => {
     try {
       setLoading(true);
-      const response = await getAllReports(page, size, status as "PENDING" | "all" | "RESOLVED" | "REJECTED" | undefined);
+      const response = await getAllReports(
+        page,
+        size,
+        appliedSelectedStatus === "all" ? undefined : appliedSelectedStatus.toUpperCase() as "PENDING" | "RESOLVED" | "REJECTED" | undefined
+      );
 
       console.log("Raw API Response:", response);
       if (response.content && response.content.length > 0) {
@@ -89,7 +100,6 @@ export default function ReportsPage() {
       setTotalPages(response.totalPages);
       setTotalReports(response.totalElements);
       setCurrentPage(page);
-
     } catch (error) {
       console.error("Failed to fetch reports:", error);
       setReports([]);
@@ -99,7 +109,7 @@ export default function ReportsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [appliedSelectedStatus]);
 
   const fetchStatistics = useCallback(async () => {
     try {
@@ -118,9 +128,9 @@ export default function ReportsPage() {
   }, []);
 
   useEffect(() => {
-    fetchReports(currentPage, 10, selectedStatus === "all" ? undefined : selectedStatus.toUpperCase());
+    fetchReports(currentPage, 10);
     fetchStatistics();
-  }, [fetchReports, currentPage, selectedStatus, fetchStatistics]);
+  }, [fetchReports, currentPage, fetchStatistics]);
 
   const handleLogout = () => {
     console.log("Đăng xuất thành công");
@@ -128,34 +138,60 @@ export default function ReportsPage() {
     router.push("/login");
   };
 
+  const handleApplyFilter = async () => {
+    setAppliedSearchTerm(tempSearchTerm);
+    setAppliedSelectedStatus(tempSelectedStatus);
+    setAppliedSelectedSeverity(tempSelectedSeverity);
+    setAppliedSelectedType(tempSelectedType);
+    setAppliedSelectedDate(tempSelectedDate);
+    setCurrentPage(0);
+    await fetchReports(0, 10);
+  };
+
+  const handleClearFilter = async () => {
+    setTempSearchTerm("");
+    setTempSelectedStatus("all");
+    setTempSelectedSeverity("all");
+    setTempSelectedType("all");
+    setTempSelectedDate("");
+    setAppliedSearchTerm("");
+    setAppliedSelectedStatus("all");
+    setAppliedSelectedSeverity("all");
+    setAppliedSelectedType("all");
+    setAppliedSelectedDate("");
+    setCurrentPage(0);
+    await fetchReports(0, 10);
+  };
+
+  const hasActiveFilters = () => {
+    return (
+      appliedSearchTerm !== "" ||
+      appliedSelectedStatus !== "all" ||
+      appliedSelectedSeverity !== "all" ||
+      appliedSelectedType !== "all" ||
+      appliedSelectedDate !== ""
+    );
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status.toLowerCase()) {
       case "pending":
         return (
-          <Badge
-            variant="secondary"
-            className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100"
-          >
+          <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">
             <Flag className="w-3 h-3 mr-1" />
             Chờ xử lý
           </Badge>
         );
       case "resolved":
         return (
-          <Badge
-            variant="secondary"
-            className="bg-green-100 text-green-800 hover:bg-green-100"
-          >
+          <Badge variant="secondary" className="bg-green-100 text-green-800 hover:bg-green-100">
             <CheckCircle className="w-3 h-3 mr-1" />
             Đã xử lý
           </Badge>
         );
       case "rejected":
         return (
-          <Badge
-            variant="secondary"
-            className="bg-gray-100 text-gray-800 hover:bg-gray-100"
-          >
+          <Badge variant="secondary" className="bg-gray-100 text-gray-800 hover:bg-gray-100">
             <X className="w-3 h-3 mr-1" />
             Đã bỏ qua
           </Badge>
@@ -166,50 +202,27 @@ export default function ReportsPage() {
   };
 
   const getSeverityBadge = (severity: string | null | undefined) => {
-    const safeSeverity = (severity || 'unknown').toLowerCase();
+    const safeSeverity = (severity || "unknown").toLowerCase();
 
     switch (safeSeverity) {
       case "low":
-        return (
-          <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-            Thấp
-          </Badge>
-        );
+        return <Badge variant="secondary" className="bg-blue-100 text-blue-800">Thấp</Badge>;
       case "medium":
-        return (
-          <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
-            Trung bình
-          </Badge>
-        );
+        return <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">Trung bình</Badge>;
       case "high":
-        return (
-          <Badge variant="secondary" className="bg-orange-100 text-orange-800">
-            Cao
-          </Badge>
-        );
+        return <Badge variant="secondary" className="bg-orange-100 text-orange-800">Cao</Badge>;
       case "critical":
-        return (
-          <Badge variant="secondary" className="bg-red-100 text-red-800">
-            Nghiêm trọng
-          </Badge>
-        );
+        return <Badge variant="secondary" className="bg-red-100 text-red-800">Nghiêm trọng</Badge>;
       default:
-        return (
-          <Badge variant="secondary" className="bg-gray-100 text-gray-800">
-            Không xác định
-          </Badge>
-        );
+        return <Badge variant="secondary" className="bg-gray-100 text-gray-800">Không xác định</Badge>;
     }
   };
 
-  const handleStatusChange = async (
-    reportId: string,
-    newStatus: "PENDING" | "RESOLVED" | "REJECTED"
-  ) => {
+  const handleStatusChange = async (reportId: string, newStatus: "PENDING" | "RESOLVED" | "REJECTED") => {
     try {
       setLoading(true);
-      await updateReportStatus(reportId, { newStatus: newStatus });
-      await fetchReports(currentPage, 10, selectedStatus === "all" ? undefined : selectedStatus.toUpperCase());
+      await updateReportStatus(reportId, { newStatus });
+      await fetchReports(currentPage, 10);
       await fetchStatistics();
     } catch (error) {
       console.error("Failed to update report status:", error);
@@ -219,13 +232,12 @@ export default function ReportsPage() {
     }
   };
 
-  // NEW: Hàm xử lý xóa báo cáo đơn lẻ
   const handleIndividualDeleteReport = async (reportId: string) => {
     try {
       setLoading(true);
-      await deleteReport(reportId); // Gọi API xóa báo cáo đơn lẻ
-      await fetchReports(currentPage, 10, selectedStatus === "all" ? undefined : selectedStatus.toUpperCase());
-      await fetchStatistics(); // Cập nhật thống kê sau khi xóa
+      await deleteReport(reportId);
+      await fetchReports(currentPage, 10);
+      await fetchStatistics();
     } catch (error) {
       console.error("Failed to delete report:", error);
       alert("Không thể xóa báo cáo.");
@@ -234,17 +246,14 @@ export default function ReportsPage() {
     }
   };
 
-
   const handleSelectReport = (reportId: string) => {
     setSelectedReports((prev) =>
-      prev.includes(reportId)
-        ? prev.filter((id) => id !== reportId)
-        : [...prev, reportId]
+      prev.includes(reportId) ? prev.filter((id) => id !== reportId) : [...prev, reportId]
     );
   };
 
   const handleSelectAll = () => {
-    if (selectedReports.length > 0 && selectedReports.length === filteredReports.length && filteredReports.length > 0) {
+    if (selectedReports.length === filteredReports.length && filteredReports.length > 0) {
       setSelectedReports([]);
     } else {
       setSelectedReports(filteredReports.map((report) => report.id));
@@ -261,12 +270,11 @@ export default function ReportsPage() {
         await bulkUpdateReportStatus({ reportIds: selectedReports, newStatus: "REJECTED" });
         alert(`Đã bỏ qua ${selectedReports.length} báo cáo.`);
       } else if (action === "delete") {
-        // Hành động này hiện đang xóa báo cáo. Nếu "Ban tài khoản" là một API riêng, bạn cần gọi API đó ở đây.
-        await bulkDeleteReports(selectedReports); // Xóa báo cáo hàng loạt
+        await bulkDeleteReports(selectedReports);
         alert(`Đã xóa ${selectedReports.length} báo cáo.`);
       }
       setSelectedReports([]);
-      await fetchReports(currentPage, 10, selectedStatus === "all" ? undefined : selectedStatus.toUpperCase());
+      await fetchReports(currentPage, 10);
       await fetchStatistics();
     } catch (error) {
       console.error(`Failed to perform bulk ${action}:`, error);
@@ -282,16 +290,18 @@ export default function ReportsPage() {
   };
 
   const filteredReports = reports.filter((report) => {
-    const matchesSearch = !searchTerm ||
-      report.reason.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      report.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      report.reportedAccountUsername?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      report.reporterAccountUsername.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch =
+      !appliedSearchTerm ||
+      report.reason.toLowerCase().includes(appliedSearchTerm.toLowerCase()) ||
+      report.description?.toLowerCase().includes(appliedSearchTerm.toLowerCase()) ||
+      report.reportedAccountUsername?.toLowerCase().includes(appliedSearchTerm.toLowerCase()) ||
+      report.reporterAccountUsername.toLowerCase().includes(appliedSearchTerm.toLowerCase());
 
-    const matchesStatus = selectedStatus === "all" || report.status === selectedStatus;
-    const matchesType = selectedType === "all" || report.reportType === selectedType;
-    const matchesSeverity = selectedSeverity === "all" || report.severity === selectedSeverity;
-    const matchesDate = !selectedDate || (new Date(report.createdAt).toISOString().split('T')[0] === selectedDate);
+    const matchesStatus = appliedSelectedStatus === "all" || report.status === appliedSelectedStatus;
+    const matchesType = appliedSelectedType === "all" || report.reportType === appliedSelectedType;
+    const matchesSeverity = appliedSelectedSeverity === "all" || report.severity === appliedSelectedSeverity;
+    const matchesDate =
+      !appliedSelectedDate || new Date(report.createdAt).toISOString().split("T")[0] === appliedSelectedDate;
 
     return matchesSearch && matchesStatus && matchesType && matchesSeverity && matchesDate;
   });
@@ -323,7 +333,7 @@ export default function ReportsPage() {
         key="prev"
         variant="outline"
         size="sm"
-        onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))}
+        onClick={() => setCurrentPage((prev) => Math.max(0, prev - 1))}
         disabled={currentPage === 0 || loading}
       >
         «
@@ -334,14 +344,14 @@ export default function ReportsPage() {
     let endPage = Math.min(totalPages - 1, currentPage + 2);
 
     if (totalPages <= 5) {
-        startPage = 0;
-        endPage = totalPages - 1;
+      startPage = 0;
+      endPage = totalPages - 1;
     } else if (currentPage <= 2) {
-        startPage = 0;
-        endPage = 4;
+      startPage = 0;
+      endPage = 4;
     } else if (currentPage >= totalPages - 3) {
-        startPage = totalPages - 5;
-        endPage = totalPages - 1;
+      startPage = totalPages - 5;
+      endPage = totalPages - 1;
     }
 
     for (let i = startPage; i <= endPage; i++) {
@@ -363,7 +373,7 @@ export default function ReportsPage() {
         key="next"
         variant="outline"
         size="sm"
-        onClick={() => setCurrentPage(prev => Math.min(totalPages - 1, prev + 1))}
+        onClick={() => setCurrentPage((prev) => Math.min(totalPages - 1, prev + 1))}
         disabled={currentPage === totalPages - 1 || loading}
       >
         »
@@ -390,14 +400,24 @@ export default function ReportsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">{statusLabels[key]}</p>
-                  <p className={`text-2xl font-bold ${key === 'pending' ? 'text-yellow-600' : key === 'resolved' ? 'text-green-600' : key === 'rejected' ? 'text-gray-600' : 'text-blue-500'}`}>
+                  <p
+                    className={`text-2xl font-bold ${
+                      key === "pending"
+                        ? "text-yellow-600"
+                        : key === "resolved"
+                        ? "text-green-600"
+                        : key === "rejected"
+                        ? "text-gray-600"
+                        : "text-blue-500"
+                    }`}
+                  >
                     {typeof value === "number" ? value : JSON.stringify(value)}
                   </p>
                 </div>
-                {key === 'total' && <Flag className="w-8 h-8 text-blue-500" />}
-                {key === 'pending' && <Flag className="w-8 h-8 text-yellow-500" />}
-                {key === 'resolved' && <CheckCircle className="w-8 h-8 text-green-500" />}
-                {key === 'rejected' && <X className="w-8 h-8 text-gray-500" />}
+                {key === "total" && <Flag className="w-8 h-8 text-blue-500" />}
+                {key === "pending" && <Flag className="w-8 h-8 text-yellow-500" />}
+                {key === "resolved" && <CheckCircle className="w-8 h-8 text-green-500" />}
+                {key === "rejected" && <X className="w-8 h-8 text-gray-500" />}
               </div>
             </CardContent>
           </Card>
@@ -430,8 +450,6 @@ export default function ReportsPage() {
                   <X className="w-4 h-4 mr-1" />
                   Bỏ qua ({selectedReports.length})
                 </Button>
-
-                {/* Nút xóa báo cáo hàng loạt riêng biệt */}
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button
@@ -454,7 +472,7 @@ export default function ReportsPage() {
                     <AlertDialogFooter>
                       <AlertDialogCancel>Hủy</AlertDialogCancel>
                       <AlertDialogAction
-                        onClick={() => handleBulkAction("delete")} // Gọi hàm xóa hàng loạt
+                        onClick={() => handleBulkAction("delete")}
                         className="bg-red-600 hover:bg-red-700"
                       >
                         Xóa
@@ -462,8 +480,6 @@ export default function ReportsPage() {
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
-
-                {/* Nút "Khóa tài khoản" hiện tại - đã điều chỉnh mô tả */}
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button
@@ -478,9 +494,7 @@ export default function ReportsPage() {
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>
-                        Xác nhận khóa tài khoản và xóa báo cáo
-                      </AlertDialogTitle>
+                      <AlertDialogTitle>Xác nhận khóa tài khoản và xóa báo cáo</AlertDialogTitle>
                       <AlertDialogDescription>
                         Bạn có chắc chắn muốn thực hiện hành động này? Hành động này sẽ **xóa các báo cáo đã chọn** và ngụ ý rằng bạn sẽ **thực hiện việc khóa tài khoản người dùng liên quan một cách riêng biệt** nếu có.
                         <br />
@@ -490,7 +504,7 @@ export default function ReportsPage() {
                     <AlertDialogFooter>
                       <AlertDialogCancel>Hủy</AlertDialogCancel>
                       <AlertDialogAction
-                        onClick={() => handleBulkAction("delete")} // Vẫn gọi hàm xóa báo cáo hàng loạt
+                        onClick={() => handleBulkAction("delete")}
                         className="bg-red-600 hover:bg-red-700"
                       >
                         Tiếp tục và Xóa Báo cáo
@@ -506,24 +520,20 @@ export default function ReportsPage() {
           {/* Filters */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
             <div>
-              <Label className="text-sm font-medium text-gray-700 mb-2">
-                Tìm kiếm
-              </Label>
+              <Label className="text-sm font-medium text-gray-700 mb-2">Tìm kiếm</Label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <Input
                   placeholder="Tìm kiếm người dùng, lý do..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  value={tempSearchTerm}
+                  onChange={(e) => setTempSearchTerm(e.target.value)}
                   className="pl-10"
                 />
               </div>
             </div>
             <div>
-              <Label className="text-sm font-medium text-gray-700 mb-2">
-                Trạng thái
-              </Label>
-              <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+              <Label className="text-sm font-medium text-gray-700 mb-2">Trạng thái</Label>
+              <Select value={tempSelectedStatus} onValueChange={setTempSelectedStatus}>
                 <SelectTrigger>
                   <SelectValue placeholder="Tất cả trạng thái" />
                 </SelectTrigger>
@@ -536,13 +546,8 @@ export default function ReportsPage() {
               </Select>
             </div>
             <div>
-              <Label className="text-sm font-medium text-gray-700 mb-2">
-                Mức độ nghiêm trọng
-              </Label>
-              <Select
-                value={selectedSeverity}
-                onValueChange={setSelectedSeverity}
-              >
+              <Label className="text-sm font-medium text-gray-700 mb-2">Mức độ nghiêm trọng</Label>
+              <Select value={tempSelectedSeverity} onValueChange={setTempSelectedSeverity}>
                 <SelectTrigger>
                   <SelectValue placeholder="Tất cả mức độ" />
                 </SelectTrigger>
@@ -556,29 +561,85 @@ export default function ReportsPage() {
               </Select>
             </div>
             <div>
-              <Label className="text-sm font-medium text-gray-700 mb-2">
-                Ngày báo cáo
-              </Label>
-              <Input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-              />
+              <Label className="text-sm font-medium text-gray-700 mb-2">Loại báo cáo</Label>
+              <Select value={tempSelectedType} onValueChange={setTempSelectedType}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Tất cả loại" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tất cả loại</SelectItem>
+                  <SelectItem value="recipe">Công thức</SelectItem>
+                  <SelectItem value="comment">Bình luận</SelectItem>
+                  <SelectItem value="user">Người dùng</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <div className="flex items-end">
-              <Button className="w-full" variant="outline" onClick={() => {
-                   fetchReports(
-                    0,
-                    10,
-                    selectedStatus === "all" ? undefined : selectedStatus.toUpperCase(),
-                   );
-                   setCurrentPage(0);
-               }}>
+            <div className="flex items-end space-x-2">
+              <Button
+                className="flex-1 bg-orange-500 hover:bg-orange-600"
+                onClick={handleApplyFilter}
+                disabled={loading}
+              >
                 <Filter className="w-4 h-4 mr-2" />
                 Áp dụng bộ lọc
               </Button>
+              {hasActiveFilters() && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleClearFilter}
+                  className="px-3"
+                  disabled={loading}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              )}
             </div>
           </div>
+
+          {/* Applied Filters */}
+          {hasActiveFilters() && (
+            <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm font-medium text-orange-800">Bộ lọc đang áp dụng:</span>
+                  {appliedSearchTerm && (
+                    <Badge variant="secondary" className="bg-orange-100 text-orange-800">
+                      Tìm kiếm: "{appliedSearchTerm}"
+                    </Badge>
+                  )}
+                  {appliedSelectedStatus !== "all" && (
+                    <Badge variant="secondary" className="bg-orange-100 text-orange-800">
+                      Trạng thái:{" "}
+                      {appliedSelectedStatus === "PENDING"
+                        ? "Chờ xử lý"
+                        : appliedSelectedStatus === "RESOLVED"
+                        ? "Đã xử lý"
+                        : "Đã bỏ qua"}
+                    </Badge>
+                  )}
+                  {appliedSelectedSeverity !== "all" && (
+                    <Badge variant="secondary" className="bg-orange-100 text-orange-800">
+                      Mức độ: {severityLabels[appliedSelectedSeverity.toLowerCase()] || "Không xác định"}
+                    </Badge>
+                  )}
+                  {appliedSelectedType !== "all" && (
+                    <Badge variant="secondary" className="bg-orange-100 text-orange-800">
+                      Loại: {typeLabels[appliedSelectedType.toLowerCase()] || "Không xác định"}
+                    </Badge>
+                  )}
+                  {appliedSelectedDate && (
+                    <Badge variant="secondary" className="bg-orange-100 text-orange-800">
+                      Ngày: {appliedSelectedDate}
+                    </Badge>
+                  )}
+                </div>
+                <span className="text-sm text-orange-600">
+                  Tìm thấy {filteredReports.length} kết quả
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* Table */}
           <div className="overflow-x-auto">
@@ -589,34 +650,18 @@ export default function ReportsPage() {
                     <input
                       type="checkbox"
                       className="rounded"
-                      checked={selectedReports.length > 0 && selectedReports.length === filteredReports.length && filteredReports.length > 0}
+                      checked={selectedReports.length === filteredReports.length && filteredReports.length > 0}
                       onChange={handleSelectAll}
                     />
                   </th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-700">
-                    STT
-                  </th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-700">
-                    Người bị báo cáo
-                  </th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-700">
-                    Người báo cáo
-                  </th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-700">
-                    Lý do
-                  </th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-700">
-                    Mức độ
-                  </th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-700">
-                    Ngày báo cáo
-                  </th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-700">
-                    Trạng thái
-                  </th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-700">
-                    Thao tác
-                  </th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-700">STT</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Người bị báo cáo</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Người báo cáo</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Lý do</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Mức độ</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Ngày báo cáo</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Trạng thái</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Thao tác</th>
                 </tr>
               </thead>
               <tbody>
@@ -634,10 +679,7 @@ export default function ReportsPage() {
                   </tr>
                 ) : (
                   filteredReports.map((report, index) => (
-                    <tr
-                      key={report.id}
-                      className="border-b border-gray-100 hover:bg-gray-50"
-                    >
+                    <tr key={report.id} className="border-b border-gray-100 hover:bg-gray-50">
                       <td className="py-3 px-4">
                         <input
                           type="checkbox"
@@ -646,31 +688,21 @@ export default function ReportsPage() {
                           onChange={() => handleSelectReport(report.id)}
                         />
                       </td>
-                      <td className="py-3 px-4 text-gray-600">
-                        {currentPage * 10 + index + 1}
-                      </td>
+                      <td className="py-3 px-4 text-gray-600">{currentPage * 10 + index + 1}</td>
                       <td className="py-3 px-4 font-medium">
-                        {/* CHỈ HIỂN THỊ TÊN NGƯỜI BỊ BÁO CÁO */}
-                        <p className="font-medium">
-                          {report.reportedAccountUsername || 'Không xác định'}
-                        </p>
-                        {/* Đã bỏ dòng hiển thị email */}
+                        <p className="font-medium">{report.reportedAccountUsername || "Không xác định"}</p>
                       </td>
-                      <td className="py-3 px-4 text-gray-600">{report.reporterAccountUsername || 'N/A'}</td>
+                      <td className="py-3 px-4 text-gray-600">{report.reporterAccountUsername || "N/A"}</td>
                       <td className="py-3 px-4 text-gray-600 max-w-xs">
                         <div className="truncate" title={report.reason}>
                           {report.reason}
                         </div>
                       </td>
-                      <td className="py-3 px-4">
-                        {getSeverityBadge(report.severity)}
-                      </td>
+                      <td className="py-3 px-4">{getSeverityBadge(report.severity)}</td>
                       <td className="py-3 px-4 text-gray-600">
                         {new Date(report.createdAt).toLocaleDateString("vi-VN")}
                       </td>
-                      <td className="py-3 px-4">
-                        {getStatusBadge(report.status)}
-                      </td>
+                      <td className="py-3 px-4">{getStatusBadge(report.status)}</td>
                       <td className="py-3 px-4">
                         <div className="flex space-x-2">
                           <Button
@@ -686,9 +718,7 @@ export default function ReportsPage() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() =>
-                                  handleStatusChange(report.id, "RESOLVED")
-                                }
+                                onClick={() => handleStatusChange(report.id, "RESOLVED")}
                                 className="text-green-600 border-green-600 hover:bg-green-50"
                                 disabled={loading}
                               >
@@ -697,9 +727,7 @@ export default function ReportsPage() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() =>
-                                  handleStatusChange(report.id, "REJECTED")
-                                }
+                                onClick={() => handleStatusChange(report.id, "REJECTED")}
                                 className="text-gray-600 border-gray-600 hover:bg-gray-50"
                                 disabled={loading}
                               >
@@ -707,7 +735,6 @@ export default function ReportsPage() {
                               </Button>
                             </>
                           )}
-                          {/* NEW: Nút xóa báo cáo riêng lẻ */}
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <Button
@@ -740,8 +767,8 @@ export default function ReportsPage() {
                         </div>
                       </td>
                     </tr>
-                  )
-                ))}
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -749,9 +776,7 @@ export default function ReportsPage() {
           {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex justify-center mt-6">
-              <div className="flex space-x-2">
-                {renderPaginationButtons()}
-              </div>
+              <div className="flex space-x-2">{renderPaginationButtons()}</div>
             </div>
           )}
         </CardContent>
@@ -762,101 +787,70 @@ export default function ReportsPage() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Chi tiết báo cáo</DialogTitle>
-            <DialogDescription>
-              Thông tin chi tiết về báo cáo vi phạm
-            </DialogDescription>
+            <DialogDescription>Thông tin chi tiết về báo cáo vi phạm</DialogDescription>
           </DialogHeader>
 
           {viewingReport && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label className="text-sm font-medium text-gray-700">
-                    Người bị báo cáo
-                  </Label>
-                  {/* CHỈ HIỂN THỊ TÊN NGƯỜI BỊ BÁO CÁO */}
+                  <Label className="text-sm font-medium text-gray-700">Người bị báo cáo</Label>
                   <p className="text-sm text-gray-900 mt-1">
-                    { viewingReport.reportedAccountUsername || 'N/A'}
+                    {viewingReport.reportedAccountUsername || "N/A"}
                   </p>
-                  {/* Đã bỏ dòng hiển thị email */}
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-gray-700">
-                    Người báo cáo
-                  </Label>
-                  {/* CHỈ HIỂN THỊ TÊN NGƯỜI BÁO CÁO */}
+                  <Label className="text-sm font-medium text-gray-700">Người báo cáo</Label>
                   <p className="text-sm text-gray-900 mt-1">
-                    { viewingReport.reporterAccountUsername || 'N/A'}
+                    {viewingReport.reporterAccountUsername || "N/A"}
                   </p>
-                  {/* Đã bỏ dòng hiển thị email */}
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label className="text-sm font-medium text-gray-700">
-                    Ngày báo cáo
-                  </Label>
+                  <Label className="text-sm font-medium text-gray-700">Ngày báo cáo</Label>
                   <p className="text-sm text-gray-900 mt-1">
                     {new Date(viewingReport.createdAt).toLocaleDateString("vi-VN")}
                   </p>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-gray-700">
-                    Mức độ nghiêm trọng
-                  </Label>
-                  <div className="mt-1">
-                    {getSeverityBadge(viewingReport.severity)}
-                  </div>
+                  <Label className="text-sm font-medium text-gray-700">Mức độ nghiêm trọng</Label>
+                  <div className="mt-1">{getSeverityBadge(viewingReport.severity)}</div>
                 </div>
               </div>
 
               <div>
-                <Label className="text-sm font-medium text-gray-700">
-                  Lý do báo cáo
-                </Label>
-                <p className="text-sm text-gray-900 mt-1">
-                  {viewingReport.reason}
-                </p>
+                <Label className="text-sm font-medium text-gray-700">Lý do báo cáo</Label>
+                <p className="text-sm text-gray-900 mt-1">{viewingReport.reason}</p>
               </div>
 
               {viewingReport.description && (
                 <div>
-                  <Label className="text-sm font-medium text-gray-700">
-                    Mô tả chi tiết
-                  </Label>
-                  <p className="text-sm text-gray-900 mt-1">
-                    {viewingReport.description}
-                  </p>
+                  <Label className="text-sm font-medium text-gray-700">Mô tả chi tiết</Label>
+                  <p className="text-sm text-gray-900 mt-1">{viewingReport.description}</p>
                 </div>
               )}
 
               {viewingReport.evidenceImageUrl && (
                 <div>
-                  <Label className="text-sm font-medium text-gray-700">
-                    Ảnh/Video bằng chứng
-                  </Label>
+                  <Label className="text-sm font-medium text-gray-700">Ảnh/Video bằng chứng</Label>
                   <div className="mt-2">
-                    {/* Hiển thị hình ảnh nếu có */}
                     <img
                       src={viewingReport.evidenceImageUrl}
                       alt="Bằng chứng"
                       className="max-w-[200px] h-auto rounded-md shadow-sm"
-                      onError={(e) => { e.currentTarget.src = 'https://via.placeholder.com/150?text=No+Image'; }} // Fallback nếu ảnh lỗi
+                      onError={(e) => {
+                        e.currentTarget.src = "https://via.placeholder.com/150?text=No+Image";
+                      }}
                     />
                   </div>
                 </div>
               )}
 
-             
-
               <div>
-                <Label className="text-sm font-medium text-gray-700">
-                  Trạng thái
-                </Label>
-                <div className="mt-1">
-                  {getStatusBadge(viewingReport.status)}
-                </div>
+                <Label className="text-sm font-medium text-gray-700">Trạng thái</Label>
+                <div className="mt-1">{getStatusBadge(viewingReport.status)}</div>
               </div>
             </div>
           )}
@@ -871,7 +865,7 @@ export default function ReportsPage() {
                   onClick={() => {
                     if (viewingReport) {
                       handleStatusChange(viewingReport.id, "RESOLVED");
-                      setIsViewDialogOpen(false); // Đóng dialog sau khi xử lý
+                      setIsViewDialogOpen(false);
                     }
                   }}
                   className="bg-green-500 hover:bg-green-600 text-white"
@@ -882,7 +876,7 @@ export default function ReportsPage() {
                   onClick={() => {
                     if (viewingReport) {
                       handleStatusChange(viewingReport.id, "REJECTED");
-                      setIsViewDialogOpen(false); // Đóng dialog sau khi xử lý
+                      setIsViewDialogOpen(false);
                     }
                   }}
                   className="bg-gray-500 hover:bg-gray-600 text-white"
