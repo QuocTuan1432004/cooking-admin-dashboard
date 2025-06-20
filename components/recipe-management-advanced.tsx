@@ -7,10 +7,7 @@ import { Plus, Carrot, Edit, Trash2 } from "lucide-react"
 import type { Recipe } from "./recipe-detail-modal"
 import { RecipeTableEnhanced } from "./recipe-table-enhanced"
 import { RecipeDetailModal } from "./recipe-detail-modal"
-import { RecipeFilters } from "./recipe-filters"
 import { RecipeEditModalImproved } from "./recipe-edit-modal-improved"
-import { RecipeStatsCards } from "./recipe-stats-cards"
-import { RecipeBulkActions } from "./recipe-bulk-actions"
 import { RecipePagination } from "./recipe-pagination"
 import type { Ingredient } from "@/hooks/RecipeApi/recipeTypes"
 import { IngredientAddModal } from "./ingredient-add-modal"
@@ -30,8 +27,8 @@ interface RecipeManagementAdvancedProps {
   currentPage?: number
   totalPages?: number
   onPageChange?: (page: number) => void
-  onStatusChange?: (recipeId: string) => void  // Thay đổi từ number thành string
-  onDeleteRecipe?: (recipeId: string) => void  // Thay đổi từ number thành string
+  onStatusChange?: (recipeId: string) => void // Thay đổi từ number thành string
+  onDeleteRecipe?: (recipeId: string) => void // Thay đổi từ number thành string
 }
 
 export function RecipeManagementAdvanced({
@@ -51,20 +48,11 @@ export function RecipeManagementAdvanced({
   onStatusChange,
   onDeleteRecipe: propOnDeleteRecipe,
 }: RecipeManagementAdvancedProps) {
-  // Filter states
-  const [searchTerm, setSearchTerm] = useState("")
-  const [selectedCategory, setSelectedCategory] = useState("all")
-  const [selectedStatus, setSelectedStatus] = useState("all")
-  const [selectedDate, setSelectedDate] = useState("")
-
   // Modal states
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isIngredientModalOpen, setIsIngredientModalOpen] = useState(false)
-
-  // Bulk actions
-  const [selectedIds, setSelectedIds] = useState<string[]>([])  // Thay đổi từ number[] thành string[]
 
   // Local pagination (chỉ sử dụng khi không có API pagination)
   const [localCurrentPage, setLocalCurrentPage] = useState(1)
@@ -80,25 +68,6 @@ export function RecipeManagementAdvanced({
   // Ingredients state
   const [ingredients, setIngredients] = useState<Ingredient[]>([])
 
-  // Filter recipes (chỉ khi không có API pagination)
-  const filteredRecipes = useMemo(() => {
-    if (propCurrentPage !== undefined) {
-      // Nếu có API pagination, return recipes as is
-      return recipes
-    }
-
-    return recipes.filter((recipe) => {
-      const matchesSearch =
-        recipe.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        recipe.author.toLowerCase().includes(searchTerm.toLowerCase())
-      const matchesCategory = selectedCategory === "all" || recipe.category === selectedCategory
-      const matchesStatus = selectedStatus === "all" || recipe.status === selectedStatus
-      const matchesDate = !selectedDate || recipe.date.includes(selectedDate)
-
-      return matchesSearch && matchesCategory && matchesStatus && matchesDate
-    })
-  }, [recipes, searchTerm, selectedCategory, selectedStatus, selectedDate, propCurrentPage])
-
   // Paginate recipes (chỉ khi không có API pagination)
   const paginatedRecipes = useMemo(() => {
     if (propCurrentPage !== undefined) {
@@ -107,18 +76,8 @@ export function RecipeManagementAdvanced({
     }
 
     const startIndex = (localCurrentPage - 1) * pageSize
-    return filteredRecipes.slice(startIndex, startIndex + pageSize)
-  }, [filteredRecipes, localCurrentPage, pageSize, recipes, propCurrentPage])
-
-  // Reset pagination when filters change
-  const handleFilterChange = () => {
-    if (propOnPageChange) {
-      propOnPageChange(0) // Reset về page 0 cho API
-    } else {
-      setLocalCurrentPage(1)
-    }
-    setSelectedIds([])
-  }
+    return recipes.slice(startIndex, startIndex + pageSize)
+  }, [recipes, localCurrentPage, pageSize, propCurrentPage])
 
   const handleViewRecipe = (recipe: Recipe) => {
     setSelectedRecipe(recipe)
@@ -135,7 +94,8 @@ export function RecipeManagementAdvanced({
     onRecipeUpdate(updatedRecipes)
   }
 
-  const handleDeleteRecipe = (recipeId: string) => {  // Thay đổi từ number thành string
+  const handleDeleteRecipe = (recipeId: string) => {
+    // Thay đổi từ number thành string
     if (propOnDeleteRecipe) {
       // Sử dụng API delete
       propOnDeleteRecipe(recipeId)
@@ -144,10 +104,10 @@ export function RecipeManagementAdvanced({
       const updatedRecipes = recipes.filter((recipe) => recipe.id !== recipeId)
       onRecipeUpdate(updatedRecipes)
     }
-    setSelectedIds(selectedIds.filter((id) => id !== recipeId))
   }
 
-  const handleApproveRecipe = (recipeId: string) => {  // Thay đổi từ number thành string
+  const handleApproveRecipe = (recipeId: string) => {
+    // Thay đổi từ number thành string
     if (onStatusChange) {
       // Sử dụng API status change
       onStatusChange(recipeId)
@@ -160,7 +120,8 @@ export function RecipeManagementAdvanced({
     }
   }
 
-  const handleRejectRecipe = (recipeId: string, reason: string) => {  // Thay đổi từ number thành string
+  const handleRejectRecipe = (recipeId: string, reason: string) => {
+    // Thay đổi từ number thành string
     if (onStatusChange) {
       // Sử dụng API status change
       onStatusChange(recipeId)
@@ -173,29 +134,6 @@ export function RecipeManagementAdvanced({
     }
   }
 
-  const handleBulkAction = (action: string, ids: string[]) => {  // Thay đổi từ number[] thành string[]
-    let updatedRecipes = [...recipes]
-
-    switch (action) {
-      case "delete":
-        updatedRecipes = recipes.filter((recipe) => !ids.includes(recipe.id))
-        break
-      case "approve":
-        updatedRecipes = recipes.map((recipe) =>
-          ids.includes(recipe.id) ? { ...recipe, status: "APPROVED" } : recipe,
-        )
-        break
-      case "reject":
-        updatedRecipes = recipes.map((recipe) =>
-          ids.includes(recipe.id) ? { ...recipe, status: "NOT_APPROVED" } : recipe,
-        )
-        break
-    }
-
-    onRecipeUpdate(updatedRecipes)
-    setSelectedIds([]) // Clear selection after bulk action
-  }
-
   const handleAddIngredient = (newIngredient: Omit<Ingredient, "id">) => {
     const ingredient: Ingredient = {
       ...newIngredient,
@@ -204,14 +142,8 @@ export function RecipeManagementAdvanced({
     setIngredients([...ingredients, ingredient])
   }
 
-  const getUniqueCategories = () => {
-    return [...new Set(recipes.map((recipe) => recipe.category))]
-  }
-
   return (
     <>
-      {showStats && <RecipeStatsCards recipes={recipes} />}
-
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
@@ -243,45 +175,20 @@ export function RecipeManagementAdvanced({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {showFilters && (
-            <div onChange={handleFilterChange}>
-              <RecipeFilters
-                searchTerm={searchTerm}
-                onSearchChange={setSearchTerm}
-                selectedCategory={selectedCategory}
-                onCategoryChange={setSelectedCategory}
-                selectedStatus={selectedStatus}
-                onStatusChange={setSelectedStatus}
-                selectedDate={selectedDate}
-                onDateChange={setSelectedDate}
-                categories={getUniqueCategories()}
-              />
-            </div>
-          )}
-
-          {showBulkActions && (
-            <RecipeBulkActions
-              recipes={paginatedRecipes}
-              selectedIds={selectedIds}
-              onSelectionChange={setSelectedIds}
-              onBulkAction={handleBulkAction}
-            />
-          )}
-
           <RecipeTableEnhanced
             recipes={paginatedRecipes}
             onView={handleViewRecipe}
             onEdit={handleEditRecipe}
             onDelete={handleDeleteRecipe}
-            selectedIds={showBulkActions ? selectedIds : undefined}
-            onSelectionChange={showBulkActions ? setSelectedIds : undefined}
+            selectedIds={undefined} // Loại bỏ bulk selection
+            onSelectionChange={undefined} // Loại bỏ bulk selection
           />
 
           <RecipePagination
             currentPage={currentPage}
             totalPages={totalPages}
             pageSize={pageSize}
-            totalItems={propCurrentPage !== undefined ? recipes.length : filteredRecipes.length}
+            totalItems={propCurrentPage !== undefined ? recipes.length : recipes.length}
             onPageChange={onPageChange}
             onPageSizeChange={(size) => {
               setPageSize(size)
@@ -316,7 +223,6 @@ export function RecipeManagementAdvanced({
           setSelectedRecipe(null)
         }}
         onSave={handleSaveRecipe}
-        ingredients={ingredients}
       />
 
       <IngredientAddModal
