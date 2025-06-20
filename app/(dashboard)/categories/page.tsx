@@ -1,779 +1,826 @@
+
 "use client"
 
+import type React from "react"
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Header } from "@/components/ui/header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Edit, Trash2, FolderOpen, Folder, Upload, X } from "lucide-react"
+import { Upload, Save, ArrowLeft, Clock, ChefHat, ImageIcon, X, Search, Plus, Edit, Trash2 } from "lucide-react"
 import Image from "next/image"
-import { useRouter } from "next/navigation"
-import { useAuth } from "@/hooks/userAuth"
-import {
-  getAllMainCategories,
-  createMainCategory,
-  updateMainCategory,
-  createSubCategory,
-  updateSubCategory,
-  deleteSubCategory,
-  deleteMainCategory,
-} from "@/hooks/categoryApi/categoryApi"
+import { IngredientSelectModal } from "@/components/ingredient-select-modal"
+import { InstructionAddModal, type Instruction as InstructionType } from "@/components/instruction-add-modal"
+// Import API functions
+import { getAllMainCategories } from "@/hooks/categoryApi/categoryApi"
+import { getAllIngredients } from "@/hooks/RecipeApi/ingredientsApi"
+import { createRecipe } from "@/hooks/RecipeApi/recipeApi"
+import { createRecipeStep } from "@/hooks/RecipeApi/recipeSteps"
+import { createRecipeIngredient } from "@/hooks/RecipeApi/recipeIngredients"
 import type { Category } from "@/hooks/categoryApi/types"
+import type { Ingredient, RecipeCreationRequest, RecipeIngredientsCreationRequest, RecipeStepsCreationRequest } from "@/hooks/RecipeApi/recipeTypes"
 
-export default function CategoriesPage() {
+interface Recipe {
+  title: string
+  description: string
+  img: File | null
+  cookingTime: string
+  difficulty: "Easy" | "Medium" | "Hard" | ""
+  parentCategory: string
+  subCategory: string
+  ingredients: string[]
+  instructions: string[]
+}
+
+interface RecipeInstruction {
+  step: number
+  description: string
+  time?: string
+  image?: string | undefined
+}
+
+export default function CreateRecipePage() {
   const router = useRouter()
-  const { logout } = useAuth()
-  const [unreadNotifications] = useState(3)
+  const [isLoading, setIsLoading] = useState(false)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [dragActive, setDragActive] = useState(false)
+  const [isIngredientSelectOpen, setIsIngredientSelectOpen] = useState(false)
+  const [isInstructionModalOpen, setIsInstructionModalOpen] = useState(false)
+  const [editingInstructionIndex, setEditingInstructionIndex] = useState<number | null>(null)
+  const [detailedInstructions, setDetailedInstructions] = useState<RecipeInstruction[]>([])
+
+  // State for API data
   const [categories, setCategories] = useState<Category[]>([])
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [editingCategory, setEditingCategory] = useState<Category | null>(null)
+  const [ingredients, setIngredients] = useState<Ingredient[]>([])
+  const [loadingCategories, setLoadingCategories] = useState(true)
+  const [loadingIngredients, setLoadingIngredients] = useState(true)
 
-  // State cho create form
-  const [newCategory, setNewCategory] = useState({
-    name: "",
-    parentId: "",
-    image: "" as string | File,
-  })
-  const [createSubCategoryImage, setCreateSubCategoryImage] = useState<string>("")
-
-  // State cho edit form - tách riêng và để trống
-  const [editCategory, setEditCategory] = useState({
-    name: "",
-    parentId: "",
-    image: "" as string | File,
-  })
-  const [editSubCategoryImage, setEditSubCategoryImage] = useState<string>("")
-
-  const [deleteConfirmDialog, setDeleteConfirmDialog] = useState({
-    isOpen: false,
-    categoryId: "",
-    categoryName: "",
-    parentId: "",
+  const [recipe, setRecipe] = useState<Recipe>({
+    title: "",
+    description: "",
+    img: null,
+    cookingTime: "",
+    difficulty: "",
+    parentCategory: "",
+    subCategory: "",
+    ingredients: [],
+    instructions: [],
   })
 
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [isUpdateSubDialogOpen, setIsUpdateSubDialogOpen] = useState(false)
-  const [selectKey, setSelectKey] = useState(0)
+  const [errors, setErrors] = useState<Record<string, string>>({})
 
+  const handleInputChange = (field: keyof Recipe, value: string) => {
+    setRecipe((prev) => ({ ...prev, [field]: value }))
+    // Clear error when user starts typing
+    if (errors[field]) {
+      setErrors((prev) => ({ ...prev, [field]: "" }))
+    }
+  }
+
+  const handleParentCategoryChange = (value: string) => {
+    setRecipe((prev) => ({
+      ...prev,
+      parentCategory: value,
+      subCategory: "", // Reset subcategory when parent changes
+    }))
+  }
+
+  const getSubCategories = () => {
+    const parentCat = categories.find((cat) => cat.id === recipe.parentCategory)
+    return parentCat?.children || []
+  }
+
+  const handleImageUpload = (file: File) => {
+    if (file && file.type.startsWith("image/")) {
+      setRecipe((prev) => ({ ...prev, img: file }))
+      // Tạo preview từ file
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragActive(false)
+    const files = e.dataTransfer.files
+    if (files[0]) {
+      handleImageUpload(files[0])
+    }
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragActive(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragActive(false)
+  }
+
+  const addIngredientFromSelect = (ingredientText: string) => {
+    setRecipe((prev) => ({
+      ...prev,
+      ingredients: [...prev.ingredients, ingredientText],
+    }))
+  }
+
+  const removeIngredient = (index: number) => {
+    setRecipe((prev) => ({
+      ...prev,
+      ingredients: prev.ingredients.filter((_, i) => i !== index),
+    }))
+  }
+
+  const updateIngredient = (index: number, value: string) => {
+    setRecipe((prev) => ({
+      ...prev,
+      ingredients: prev.ingredients.map((ingredient, i) => (i === index ? value : ingredient)),
+    }))
+  }
+
+  const handleAddInstruction = () => {
+    setEditingInstructionIndex(null)
+    setIsInstructionModalOpen(true)
+  }
+
+  const handleEditInstruction = (index: number) => {
+    setEditingInstructionIndex(index)
+    setIsInstructionModalOpen(true)
+  }
+
+  const handleSaveInstruction = (instructionData: Omit<InstructionType, "step">) => {
+    if (editingInstructionIndex !== null) {
+      // Edit existing instruction
+      const newInstructions = [...detailedInstructions]
+      newInstructions[editingInstructionIndex] = {
+        ...instructionData,
+        step: editingInstructionIndex + 1,
+      }
+      setDetailedInstructions(newInstructions)
+    } else {
+      // Add new instruction
+      const newInstruction: RecipeInstruction = {
+        ...instructionData,
+        step: detailedInstructions.length + 1,
+      }
+      setDetailedInstructions([...detailedInstructions, newInstruction])
+    }
+  }
+
+  const removeInstruction = (index: number) => {
+    const newInstructions = detailedInstructions.filter((_, i) => i !== index)
+    // Re-number steps
+    const renumbered = newInstructions.map((inst, i) => ({ ...inst, step: i + 1 }))
+    setDetailedInstructions(renumbered)
+  }
+
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {}
+
+    if (!recipe.title.trim()) newErrors.title = "Tên công thức là bắt buộc"
+    if (!recipe.description.trim()) newErrors.description = "Mô tả là bắt buộc"
+    if (!recipe.cookingTime.trim()) newErrors.cookingTime = "Thời gian nấu là bắt buộc"
+    if (!recipe.difficulty) newErrors.difficulty = "Độ khó là bắt buộc"
+    if (!recipe.parentCategory) newErrors.parentCategory = "Danh mục chính là bắt buộc"
+    if (!recipe.subCategory) newErrors.subCategory = "Danh mục con là bắt buộc"
+    if (!recipe.img) newErrors.img = "Hình ảnh là bắt buộc"
+
+    const validIngredients = recipe.ingredients.filter((ing) => ing.trim())
+    if (validIngredients.length === 0) newErrors.ingredients = "Ít nhất một nguyên liệu là bắt buộc"
+
+    if (detailedInstructions.length === 0 || !detailedInstructions.some((inst) => inst.description.trim())) {
+      newErrors.instructions = "Ít nhất một bước làm là bắt buộc"
+    }
+
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!validateForm()) {
+      return
+    }
+
+    setIsLoading(true)
+
+    try {
+      // Step 1: Create Recipe
+      const recipeData: RecipeCreationRequest = {
+        title: recipe.title,
+        description: recipe.description,
+        difficulty: recipe.difficulty,
+        cookingTime: recipe.cookingTime,
+      }
+
+      if (!recipe.img) {
+        throw new Error("Recipe image is required")
+      }
+
+      const recipeResponse = await createRecipe(recipe.subCategory, recipeData, recipe.img)
+      const recipeId = recipeResponse.result.id
+
+      // Step 2: Create Recipe Ingredients
+      const ingredientPromises = recipe.ingredients.map(async (ingredientText, index) => {
+        // Parse ingredient string: "số_lượng đơn_vị tên_nguyên_liệu"
+        const parts = ingredientText.trim().split(' ')
+        let quantity = 0
+        let ingredientId = ''
+
+        // Find ingredient in the ingredients list
+        const ingredientName = parts.slice(parts.length >= 3 ? 2 : 0).join(' ')
+        const matchedIngredient = ingredients.find(ing => ing.ingredientName.toLowerCase() === ingredientName.toLowerCase())
+        
+        if (!matchedIngredient) {
+          throw new Error(`Ingredient not found: ${ingredientName}`)
+        }
+        
+        ingredientId = matchedIngredient.id
+        
+        // Extract quantity
+        if (parts.length >= 3) {
+          const quantityMatch = parts[0].match(/[\d.,]+/)
+          if (quantityMatch) {
+            quantity = parseFloat(quantityMatch[0].replace(',', '.'))
+          }
+        }
+
+        const ingredientData: RecipeIngredientsCreationRequest = {
+          recipeId,
+          ingredientId,
+          quantity,
+        }
+
+        return createRecipeIngredient(ingredientData)
+      })
+
+      await Promise.all(ingredientPromises)
+
+      // Step 3: Create Recipe Steps
+      const stepPromises = detailedInstructions
+        .filter((inst) => inst.description.trim())
+        .map(async (inst, index) => {
+          const stepData: RecipeStepsCreationRequest = {
+            step: index + 1,
+            description: inst.description,
+            waitingTime: inst.time || undefined,
+          }
+
+          // Handle image conversion if it's a string (base64 or URL)
+          let imageFile: File | undefined = undefined
+          if (inst.image && typeof inst.image === 'string') {
+            // If it's a base64 string, convert to File
+            if (inst.image.startsWith('data:')) {
+              const response = await fetch(inst.image)
+              const blob = await response.blob()
+              imageFile = new File([blob], `step-${index + 1}.jpg`, { type: 'image/jpeg' })
+            }
+            // If it's just a URL, we skip it for now as we need actual File objects
+          }
+
+          return createRecipeStep(recipeId, stepData, imageFile)
+        })
+
+      await Promise.all(stepPromises)
+
+      // Success
+      alert("Công thức đã được tạo thành công!")
+      router.push("/recipes")
+    } catch (error) {
+      console.error("Error creating recipe:", error)
+      setErrors((prev) => ({
+        ...prev,
+        form: error instanceof Error ? error.message : "Đã có lỗi xảy ra khi tạo công thức",
+      }))
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const getDifficultyColor = (difficulty: string) => {
+    switch (difficulty) {
+      case "Easy":
+        return "text-green-600 bg-green-100"
+      case "Medium":
+        return "text-yellow-600 bg-yellow-100"
+      case "Hard":
+        return "text-red-600 bg-red-100"
+      default:
+        return "text-gray-600 bg-gray-100"
+    }
+  }
+
+  // Load data from APIs
   useEffect(() => {
-    const fetchCategories = async () => {
-      setIsLoading(true)
-      setError(null)
+    const loadCategories = async () => {
       try {
-        const categoriesWithSub = await getAllMainCategories()
-        setCategories(categoriesWithSub)
+        setLoadingCategories(true)
+        const categoriesData = await getAllMainCategories()
+        setCategories(categoriesData)
       } catch (error) {
-        console.error("Không thể lấy danh mục:", error)
-        setError("Không thể tải danh mục. Vui lòng thử lại.")
+        console.error('Error loading categories:', error)
+        // Show error message to user
       } finally {
-        setIsLoading(false)
+        setLoadingCategories(false)
       }
     }
-    fetchCategories()
+
+    const loadIngredients = async () => {
+      try {
+        setLoadingIngredients(true)
+        const ingredientsData = await getAllIngredients()
+        setIngredients(ingredientsData)
+      } catch (error) {
+        console.error('Error loading ingredients:', error)
+        // Show error message to user
+      } finally {
+        setLoadingIngredients(false)
+      }
+    }
+
+    loadCategories()
+    loadIngredients()
   }, [])
 
-  const handleCreateImageUpload = (file: File) => {
-    if (file && file.type.startsWith("image/")) {
-      setNewCategory((prev) => ({ ...prev, image: file }))
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        const result = e.target?.result as string
-        setCreateSubCategoryImage(result)
-      }
-      reader.readAsDataURL(file)
-    }
-  }
-
-  const handleEditImageUpload = (file: File) => {
-    if (file && file.type.startsWith("image/")) {
-      setEditCategory((prev) => ({ ...prev, image: file }))
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        const result = e.target?.result as string
-        setEditSubCategoryImage(result)
-      }
-      reader.readAsDataURL(file)
-    }
-  }
-
-  const handleCreateCategory = async () => {
-    try {
-      if (newCategory.parentId) {
-        const newSubCategory = await createSubCategory(
-          newCategory.parentId,
-          newCategory.name,
-          newCategory.image as File,
-        )
-        setCategories((prev) =>
-          prev.map((cat) =>
-            cat.id === newCategory.parentId ? { ...cat, children: [...(cat.children || []), newSubCategory] } : cat,
-          ),
-        )
-      } else {
-        const newMainCategory = await createMainCategory({
-          categoryName: newCategory.name,
-        })
-        // Đảm bảo category mới có đầy đủ thông tin
-        const categoryToAdd = {
-          ...newMainCategory,
-          children: newMainCategory.children || [],
-          recipeCount: newMainCategory.recipeCount || 0,
-        }
-        setCategories((prev) => [...prev, categoryToAdd])
-        // Force re-render Select component
-        setSelectKey((prev) => prev + 1)
-      }
-      setNewCategory({ name: "", parentId: "", image: "" })
-      setCreateSubCategoryImage("")
-    } catch (error) {
-      console.error("Không thể tạo danh mục:", error)
-      setError("Không thể tạo danh mục. Vui lòng thử lại.")
-    }
-  }
-
-  const resetEditStates = () => {
-    setEditCategory({ name: "", parentId: "", image: "" })
-    setEditSubCategoryImage("")
-    setEditingCategory(null)
-    setIsEditDialogOpen(false)
-    setIsUpdateSubDialogOpen(false)
-  }
-
-  const handleEditCategory = (category: Category) => {
-    setEditingCategory(category)
-
-    // Reset states trước khi set mới
-    setIsEditDialogOpen(false)
-    setIsUpdateSubDialogOpen(false)
-    setEditSubCategoryImage("")
-
-    // Để tất cả các trường trống - người dùng chỉ điền những gì muốn thay đổi
-    setEditCategory({
-      name: "",
-      parentId: "",
-      image: "",
-    })
-
-    // Phân biệt main category và subcategory
-    const isSubcategory = categories.some((mainCat) => mainCat.children?.some((child) => child.id === category.id))
-
-    if (isSubcategory) {
-      console.log("Opening subcategory dialog")
-      setIsUpdateSubDialogOpen(true)
-    } else {
-      console.log("Opening main category dialog")
-      setIsEditDialogOpen(true)
-    }
-  }
-
-  const handleUpdateMainCategory = async (id: string, name: string) => {
-    try {
-      if (!name) {
-        setError("Vui lòng nhập tên danh mục để cập nhật")
-        return
-      }
-      const updatedCategory = await updateMainCategory(id, {
-        categoryName: name,
-      })
-      setCategories((prev) => prev.map((cat) => (cat.id === id ? { ...updatedCategory, children: cat.children } : cat)))
-      resetEditStates()
-    } catch (error) {
-      console.error("Failed to update main category:", error)
-      setError(error instanceof Error ? error.message : "Không thể cập nhật danh mục chính. Vui lòng thử lại.")
-    }
-  }
-
-  const handleUpdateSubCategory = async () => {
-    try {
-      if (!editingCategory) {
-        setError("Không tìm thấy danh mục để cập nhật")
-        return
-      }
-
-      // Kiểm tra xem có ít nhất một trường được điền không
-      const hasNameChange = editCategory.name.trim() !== ""
-      const hasParentChange = editCategory.parentId !== ""
-      const hasImageChange = editCategory.image !== ""
-
-      if (!hasNameChange && !hasParentChange && !hasImageChange) {
-        setError("Vui lòng điền ít nhất một trường để cập nhật")
-        return
-      }
-
-      // Gửi dữ liệu trực tiếp - rỗng thì gửi rỗng
-      await updateSubCategory(
-        editingCategory.id,
-        editCategory.name.trim(), // Gửi tên mới hoặc rỗng
-        editCategory.parentId, // Gửi parentId mới hoặc rỗng
-        editCategory.image instanceof File ? editCategory.image : undefined,
-      )
-
-      // Refresh lại toàn bộ categories thay vì cập nhật state phức tạp
-      const updatedCategories = await getAllMainCategories()
-      setCategories(updatedCategories)
-
-      resetEditStates()
-      setError(null)
-    } catch (error) {
-      console.error("Failed to update subcategory:", error)
-      setError(error instanceof Error ? error.message : "Không thể cập nhật danh mục con. Vui lòng thử lại.")
-    }
-  }
-
-  const handleDeleteCategory = async (categoryId: string, parentId?: string) => {
-    try {
-      if (parentId) {
-        await deleteSubCategory(categoryId)
-        setCategories((prev) =>
-          prev.map((cat) =>
-            cat.id === parentId
-              ? { ...cat, children: cat.children?.filter((child) => child.id !== categoryId) || [] }
-              : cat,
-          ),
-        )
-      } else {
-        await deleteMainCategory(categoryId)
-        setCategories((prev) => prev.filter((cat) => cat.id !== categoryId))
-      }
-      setDeleteConfirmDialog({ isOpen: false, categoryId: "", categoryName: "", parentId: "" })
-    } catch (error) {
-      console.error("Không thể xóa danh mục:", error)
-      setError("Không thể xóa danh mục. Vui lòng thử lại.")
-    }
-  }
-
-  const openDeleteConfirmDialog = (categoryId: string, categoryName: string, parentId?: string) => {
-    setDeleteConfirmDialog({
-      isOpen: true,
-      categoryId,
-      categoryName,
-      parentId: parentId || "",
-    })
-  }
-
-  const getParentCategories = () => {
-    const parentCats = categories.filter((cat) => cat.id && (!cat.parentId || cat.parentId === ""))
-    return parentCats
-  }
-
-  const getCurrentParentCategory = () => {
-    if (editingCategory) {
-      // Tìm parent category chứa subcategory này
-      for (const mainCat of categories) {
-        if (mainCat.children?.some((child) => child.id === editingCategory.id)) {
-          return mainCat
-        }
-      }
-    }
-    return null
-  }
-
-  const handleLogout = async () => {
-    await logout()
-  }
-
-  // Kiểm tra xem có ít nhất một trường được điền không
-  const hasChanges = () => {
-    return editCategory.name.trim() !== "" || editCategory.parentId !== "" || editCategory.image !== ""
-  }
-
-  // Kiểm tra xem có thực sự thay đổi gì không
-  const hasActualChanges = () => {
-    if (!editingCategory) return false
-
-    const nameChanged = editCategory.name.trim() !== "" && editCategory.name.trim() !== editingCategory.name
-    const parentChanged = editCategory.parentId !== "" && editCategory.parentId !== editingCategory.parentId
-    const imageChanged = editCategory.image !== ""
-
-    return nameChanged || parentChanged || imageChanged
-  }
-
   return (
-    <div>
-      <Header
-        title="Quản lý Danh mục"
-        showSearch={false}
-        userName="Nguyễn Huỳnh Quốc Tuấn"
-        onLogout={handleLogout}
-        notificationCount={unreadNotifications}
-      />
-      {error && <p className="text-red-500 text-center my-4">{error}</p>}
-      {isLoading ? (
-        <p className="text-center my-4">Đang tải...</p>
-      ) : (
-        <>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+    <>
+      <div>
+        <Header title="Thêm công thức mới" showSearch={false} />
+
+        <div className="max-w-4xl mx-auto">
+          <div className="mb-6">
+            <Button variant="outline" onClick={() => router.back()} className="mb-4">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Quay lại
+            </Button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-8">
+            {/* Basic Information */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center">
-                  <FolderOpen className="w-5 h-5 mr-2 text-orange-500" />
-                  Tạo danh mục chính
+                  <ChefHat className="w-5 h-5 mr-2 text-orange-500" />
+                  Thông tin cơ bản
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label htmlFor="main-category-name">Tên danh mục</Label>
-                  <Input
-                    id="main-category-name"
-                    placeholder="Nhập tên danh mục chính"
-                    value={newCategory.parentId === "" ? newCategory.name : ""}
-                    onChange={(e) =>
-                      setNewCategory((prev) => ({
-                        ...prev,
-                        name: e.target.value,
-                        parentId: "",
-                      }))
-                    }
-                  />
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <Label htmlFor="title">
+                      Tên công thức <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      id="title"
+                      value={recipe.title}
+                      onChange={(e) => handleInputChange("title", e.target.value)}
+                      placeholder="Nhập tên công thức..."
+                      className={errors.title ? "border-red-500" : ""}
+                    />
+                    {errors.title && <p className="text-red-500 text-sm mt-1">{errors.title}</p>}
+                  </div>
+
+                  <div>
+                    <Label htmlFor="cookingTime">
+                      Thời gian nấu <span className="text-red-500">*</span>
+                    </Label>
+                    <div className="relative">
+                      <Clock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                      <Input
+                        id="cookingTime"
+                        value={recipe.cookingTime}
+                        onChange={(e) => handleInputChange("cookingTime", e.target.value)}
+                        placeholder="VD: 30 phút"
+                        className={`pl-10 ${errors.cookingTime ? "border-red-500" : ""}`}
+                      />
+                    </div>
+                    {errors.cookingTime && <p className="text-red-500 text-sm mt-1">{errors.cookingTime}</p>}
+                  </div>
                 </div>
-                <Button
-                  onClick={handleCreateCategory}
-                  className="w-full bg-orange-500 hover:bg-orange-600"
-                  disabled={!newCategory.name || newCategory.parentId !== ""}
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Tạo danh mục chính
-                </Button>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <Folder className="w-5 h-5 mr-2 text-blue-500" />
-                  Tạo danh mục con
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
+
                 <div>
-                  <Label htmlFor="parent-category">Danh mục cha</Label>
-                  <Select
-                    key={selectKey}
-                    value={newCategory.parentId}
-                    onValueChange={(value) => setNewCategory((prev) => ({ ...prev, parentId: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Chọn danh mục cha" />
+                  <Label htmlFor="description">
+                    Mô tả <span className="text-red-500">*</span>
+                  </Label>
+                  <textarea
+                    id="description"
+                    value={recipe.description}
+                    onChange={(e) => handleInputChange("description", e.target.value)}
+                    placeholder="Mô tả về công thức này..."
+                    rows={4}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 ${
+                      errors.description ? "border-red-500" : "border-gray-300"
+                    }`}
+                  />
+                  {errors.description && <p className="text-red-500 text-sm mt-1">{errors.description}</p>}
+                </div>
+
+                <div>
+                  <Label htmlFor="difficulty">
+                    Độ khó <span className="text-red-500">*</span>
+                  </Label>
+                  <Select value={recipe.difficulty} onValueChange={(value) => handleInputChange("difficulty", value)}>
+                    <SelectTrigger className={errors.difficulty ? "border-red-500" : ""}>
+                      <SelectValue placeholder="Chọn độ khó" />
                     </SelectTrigger>
                     <SelectContent>
-                      {getParentCategories().map((category) => (
-                        <SelectItem key={category.id || `temp-${category.name}`} value={category.id}>
-                          {category.name}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="Easy">
+                        <span className={`px-2 py-1 rounded-full text-sm ${getDifficultyColor("Easy")}`}>Dễ</span>
+                      </SelectItem>
+                      <SelectItem value="Medium">
+                        <span className={`px-2 py-1 rounded-full text-sm ${getDifficultyColor("Medium")}`}>
+                          Trung bình
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="Hard">
+                        <span className={`px-2 py-1 rounded-full text-sm ${getDifficultyColor("Hard")}`}>Khó</span>
+                      </SelectItem>
                     </SelectContent>
                   </Select>
+                  {errors.difficulty && <p className="text-red-500 text-sm mt-1">{errors.difficulty}</p>}
                 </div>
-                <div>
-                  <Label htmlFor="sub-category-name">Tên danh mục con</Label>
-                  <Input
-                    id="sub-category-name"
-                    placeholder="Nhập tên danh mục con"
-                    value={newCategory.parentId !== "" ? newCategory.name : ""}
-                    onChange={(e) => setNewCategory((prev) => ({ ...prev, name: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="sub-category-image">Hình ảnh danh mục</Label>
-                  <div className="space-y-3">
-                    {createSubCategoryImage ? (
-                      <div className="relative inline-block">
+              </CardContent>
+            </Card>
+
+            {/* Image Upload */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <ImageIcon className="w-5 h-5 mr-2 text-blue-500" />
+                  Hình ảnh công thức
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div
+                    className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+                      dragActive
+                        ? "border-orange-500 bg-orange-50"
+                        : errors.img
+                          ? "border-red-500 bg-red-50"
+                        : "border-gray-300 hover:border-orange-400"
+                    }`}
+                    onDrop={handleDrop}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                  >
+                    {imagePreview ? (
+                      <div className="relative">
                         <Image
-                          src={createSubCategoryImage || "/placeholder.svg"}
+                          src={imagePreview}
                           alt="Preview"
-                          width={100}
-                          height={100}
-                          className="rounded-lg object-cover border"
+                          width={300}
+                          height={200}
+                          className="mx-auto rounded-lg object-cover"
                         />
                         <Button
                           type="button"
                           variant="outline"
                           size="sm"
-                          className="absolute -top-2 -right-2 bg-white"
+                          className="px-auto absolute top-2 right-0 bg-white"
                           onClick={() => {
-                            setCreateSubCategoryImage("")
-                            setNewCategory((prev) => ({ ...prev, image: "" }))
+                            setImagePreview(null)
+                            setRecipe((prev) => ({ ...prev, img: null }))
                           }}
                         >
-                          <X className="w-3 h-3" />
+                          <X className="w-4 h-4" />
                         </Button>
                       </div>
                     ) : (
-                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-400 transition-colors">
-                        <Upload className="w-8 h-8 mx-auto text-gray-400 mb-2" />
-                        <p className="text-sm text-gray-600 mb-2">Chọn hình ảnh</p>
-                        <label htmlFor="sub-image-upload" className="cursor-pointer">
-                          <span className="text-blue-600 hover:text-blue-700 font-medium">Tải lên file</span>
+                      <div>
+                        <Upload className="w-12 h-12 mx-auto text-gray-400 mb-4" />
+                        <p className="text-gray-600 mb-2">Kéo thả hình ảnh vào đây hoặc</p>
+                        <label htmlFor="image-upload" className="cursor-pointer">
+                          <span className="text-blue-600 hover:text-blue-700 font-medium">chọn file</span>
                           <input
-                            id="sub-image-upload"
+                            id="image-upload"
                             type="file"
                             accept="image/*"
                             className="hidden"
                             onChange={(e) => {
                               const file = e.target.files?.[0]
-                              if (file) handleCreateImageUpload(file)
+                              if (file) handleImageUpload(file)
                             }}
                           />
                         </label>
-                        <p className="text-xs text-gray-500 mt-1">PNG, JPG, GIF</p>
+                        <p className="text-sm text-gray-500 mt-2">PNG, JPG, GIF tối đa 10MB</p>
                       </div>
                     )}
                   </div>
+                  {errors.img && <p className="text-red-500 text-sm">{errors.img}</p>}
                 </div>
-                <Button
-                  onClick={handleCreateCategory}
-                  className="w-full bg-blue-500 hover:bg-blue-600"
-                  disabled={!newCategory.name || !newCategory.parentId}
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Tạo danh mục con
-                </Button>
               </CardContent>
             </Card>
-          </div>
-          {isEditDialogOpen && editingCategory && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                <div className="sticky top-0 bg-white border-b px-6 py-4 rounded-t-xl">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <FolderOpen className="w-6 h-6 text-orange-500" />
-                      <div>
-                        <h2 className="text-xl font-bold text-gray-900">Chỉnh sửa danh mục chính</h2>
-                        <p className="text-sm text-gray-500">Nhập tên mới để cập nhật danh mục</p>
-                      </div>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        resetEditStates()
-                      }}
-                      className="text-gray-400 hover:text-gray-600"
-                    >
-                      <X className="w-5 h-5" />
-                    </Button>
-                  </div>
-                </div>
-                <div className="p-6 space-y-4">
-                  <div className="bg-gray-50 p-3 rounded-lg border">
-                    <div className="flex items-center space-x-2">
-                      <FolderOpen className="w-4 h-4 text-gray-600" />
-                      <span className="text-sm font-medium text-gray-800">Tên hiện tại:</span>
-                      <span className="text-sm text-gray-700">{editingCategory.name}</span>
-                    </div>
-                  </div>
-                  <div>
-                    <Label htmlFor="edit-category-name">Tên danh mục mới</Label>
-                    <Input
-                      id="edit-category-name"
-                      value={editCategory.name}
-                      onChange={(e) => setEditCategory((prev) => ({ ...prev, name: e.target.value }))}
-                      className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                      placeholder="Nhập tên danh mục mới"
-                    />
-                  </div>
-                </div>
-                <div className="sticky bottom-0 bg-gray-50 px-6 py-4 rounded-b-xl border-t">
-                  <div className="flex space-x-3 justify-end">
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        resetEditStates()
-                      }}
-                      className="px-6 py-2 border-gray-300 text-gray-700 hover:bg-gray-100"
-                    >
-                      Hủy bỏ
-                    </Button>
-                    <Button
-                      onClick={() => {
-                        handleUpdateMainCategory(editingCategory.id, editCategory.name)
-                      }}
-                      className="px-6 py-2 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white shadow-md hover:shadow-lg transition-all"
-                      disabled={!editCategory.name.trim()}
-                    >
-                      <Edit className="w-4 h-4 mr-2" />
-                      Lưu thay đổi
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-          {isUpdateSubDialogOpen && editingCategory && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
-                <div className="bg-white border-b px-6 py-4 rounded-t-xl">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <Folder className="w-6 h-6 text-blue-500" />
-                      <div>
-                        <h2 className="text-xl font-bold text-gray-900">Chỉnh sửa danh mục con</h2>
-                        <p className="text-sm text-gray-500">Chỉ điền những trường muốn thay đổi</p>
-                      </div>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        resetEditStates()
-                      }}
-                      className="text-gray-400 hover:text-gray-600"
-                    >
-                      <X className="w-5 h-5" />
-                    </Button>
-                  </div>
-                </div>
-                <div className="p-6 space-y-4">
-                  {/* Hiển thị thông tin hiện tại */}
-                  <div className="bg-gray-50 p-3 rounded-lg border space-y-2">
-                    <div className="flex items-center space-x-2">
-                      <Folder className="w-4 h-4 text-gray-600" />
-                      <span className="text-sm font-medium text-gray-800">Tên hiện tại:</span>
-                      <span className="text-sm text-gray-700">{editingCategory.name}</span>
-                    </div>
-                    {getCurrentParentCategory() && (
-                      <div className="flex items-center space-x-2">
-                        <FolderOpen className="w-4 h-4 text-gray-600" />
-                        <span className="text-sm font-medium text-gray-800">Danh mục cha hiện tại:</span>
-                        <span className="text-sm text-gray-700">{getCurrentParentCategory()?.name}</span>
-                      </div>
-                    )}
-                  </div>
 
-                  <div>
-                    <Label htmlFor="update-parent-category">Danh mục cha mới (tùy chọn)</Label>
-                    <Select
-                      key={`edit-${selectKey}`}
-                      value={editCategory.parentId}
-                      onValueChange={(value) => setEditCategory((prev) => ({ ...prev, parentId: value }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Chọn danh mục cha mới" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {getParentCategories().map((category) => (
-                          <SelectItem
-                            key={`update-${category.id}` || `update-temp-${category.name}`}
-                            value={category.id}
-                          >
-                            {category.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label htmlFor="update-sub-category-name">Tên danh mục con mới (tùy chọn)</Label>
-                    <Input
-                      id="update-sub-category-name"
-                      placeholder="Nhập tên danh mục con mới"
-                      value={editCategory.name}
-                      onChange={(e) => setEditCategory((prev) => ({ ...prev, name: e.target.value }))}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="update-sub-category-image">Hình ảnh danh mục mới (tùy chọn)</Label>
-                    <div className="space-y-3">
-                      {editSubCategoryImage ? (
-                        <div className="relative inline-block">
-                          <Image
-                            src={editSubCategoryImage || "/placeholder.svg"}
-                            alt="Preview"
-                            width={100}
-                            height={100}
-                            className="rounded-lg object-cover border"
-                          />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="absolute -top-2 -right-2 bg-white"
-                            onClick={() => {
-                              setEditSubCategoryImage("")
-                              setEditCategory((prev) => ({ ...prev, image: "" }))
-                            }}
-                          >
-                            <X className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      ) : (
-                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-400 transition-colors">
-                          <Upload className="w-8 h-8 mx-auto text-gray-400 mb-2" />
-                          <p className="text-sm text-gray-600 mb-2">Chọn hình ảnh mới</p>
-                          <label htmlFor="update-sub-image-upload" className="cursor-pointer">
-                            <span className="text-blue-600 hover:text-blue-700 font-medium">Tải lên file</span>
-                            <input
-                              id="update-sub-image-upload"
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0]
-                                if (file) handleEditImageUpload(file)
-                              }}
-                            />
-                          </label>
-                          <p className="text-xs text-gray-500 mt-1">PNG, JPG, GIF</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex space-x-3 pt-4">
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        resetEditStates()
-                      }}
-                      className="flex-1"
-                    >
-                      Hủy bỏ
-                    </Button>
-                    <Button
-                      onClick={handleUpdateSubCategory}
-                      className="flex-1 bg-blue-500 hover:bg-blue-600"
-                      disabled={!hasChanges()}
-                    >
-                      <Edit className="w-4 h-4 mr-2" />
-                      Cập nhật danh mục con
-                    </Button>
-                  </div>
-                </div>
+        {/* Categories */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <ChefHat className="w-5 h-5 mr-2 text-green-500" />
+              Danh mục
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <Label htmlFor="parentCategory">
+                  Danh mục chính <span className="text-red-500">*</span>
+                </Label>
+                <Select 
+                  value={recipe.parentCategory} 
+                  onValueChange={handleParentCategoryChange}
+                  disabled={loadingCategories}
+                >
+                  <SelectTrigger className={errors.parentCategory ? "border-red-500" : ""}>
+                    <SelectValue placeholder={loadingCategories ? "Đang tải..." : "Chọn danh mục chính"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((category) => (
+                      <SelectItem key={category.id} value={category.id}>
+                        {category.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.parentCategory && <p className="text-red-500 text-sm mt-1">{errors.parentCategory}</p>}
               </div>
-            </div>
-          )}
-          <Card>
-            <CardHeader>
-              <CardTitle>Danh sách danh mục</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                {categories.map((category) => (
-                  <div
-                    key={category.id || `main-${category.name}-${Date.now()}`}
-                    className="border rounded-lg p-4 bg-gray-50"
-                  >
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center space-x-3">
-                        <FolderOpen className="w-6 h-6 text-orange-500" />
-                        <div>
-                          <h3 className="font-semibold text-lg">{category.name}</h3>
-                          <p className="text-gray-500 text-xs">{category.recipeCount} công thức</p>
-                        </div>
-                      </div>
-                      <div className="flex space-x-2">
-                        <Button size="sm" variant="outline" onClick={() => handleEditCategory(category)}>
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-red-600 border-red-600 hover:bg-red-50"
-                          onClick={() => openDeleteConfirmDialog(category.id, category.name)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                    {category.children && category.children.length > 0 && (
-                      <div className="ml-8 space-y-2">
-                        {category.children.map((subcategory) => (
-                          <div
-                            key={subcategory.id || `sub-${subcategory.name}-${category.id}`}
-                            className="flex items-center justify-between p-3 bg-white rounded border"
-                          >
-                            <div className="flex items-center space-x-3">
-                              <Folder className="w-5 h-5 text-blue-500" />
-                              {subcategory.image && (
-                                <Image
-                                  src={subcategory.image || "/placeholder.svg"}
-                                  alt={subcategory.name}
-                                  width={40}
-                                  height={40}
-                                  className="rounded object-cover"
-                                />
-                              )}
-                              <div>
-                                <h4 className="font-medium">{subcategory.name}</h4>
-                                <p className="text-gray-500 text-xs">{subcategory.recipeCount} công thức</p>
-                              </div>
-                            </div>
-                            <div className="flex space-x-2">
-                              <Button size="sm" variant="outline" onClick={() => handleEditCategory(subcategory)}>
-                                <Edit className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="text-red-600 border-red-600 hover:bg-red-50"
-                                onClick={() => openDeleteConfirmDialog(subcategory.id, subcategory.name, category.id)}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
+
+              <div>
+                <Label htmlFor="subCategory">
+                  Danh mục con <span className="text-red-500">*</span>
+                </Label>
+                <Select
+                  value={recipe.subCategory}
+                  onValueChange={(value) => handleInputChange("subCategory", value)}
+                  disabled={!recipe.parentCategory || loadingCategories}
+                >
+                  <SelectTrigger className={errors.subCategory ? "border-red-500" : ""}>
+                    <SelectValue placeholder="Chọn danh mục con" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {getSubCategories().map((subCategory) => (
+                      <SelectItem key={subCategory.id} value={subCategory.id}>
+                        {subCategory.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.subCategory && <p className="text-red-500 text-sm mt-1">{errors.subCategory}</p>}
+                {errors.subCategory && !recipe.parentCategory && (
+                  <p className="text-gray-500 text-sm mt-1">Vui lòng chọn danh mục chính trước</p>
+                )}
+              </div>
               </div>
             </CardContent>
           </Card>
-        </>
-      )}
-      {deleteConfirmDialog.isOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
-            <div className="p-6">
-              <div className="flex items-center space-x-3 mb-4">
-                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
-                  <Trash2 className="w-6 h-6 text-red-600" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Xác nhận xóa danh mục</h3>
-                  <p className="text-sm text-gray-500">Hành động này không thể hoàn tác</p>
-                </div>
-              </div>
+  
+              {/* Ingredients */}
+              <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span>Nguyên liệu</span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => setIsIngredientSelectOpen(true)}
+                    className="bg-blue-500 hover:bg-blue-600"
+                  >
+                    <Search className="w-4 h-4 mr-2" />
+                    Chọn nguyên liệu
+                  </Button>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                    {recipe.ingredients.length > 0 ? (
+                      <>
+                        {/* Header */}
+                        <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-gray-50 rounded-lg font-medium text-gray-700">
+                          <div className="col-span-1">#</div>
+                          <div className="col-span-6">Tên nguyên liệu</div>
+                          <div className="col-span-2">Số lượng</div>
+                          <div className="col-span-2">Đơn vị</div>
+                          <div className="col-span-1">Xóa</div>
+                        </div>
 
-              <div className="mb-6">
-                <p className="text-gray-700">
-                  Bạn có chắc chắn muốn xóa danh mục{" "}
-                  <span className="font-semibold text-red-600">"{deleteConfirmDialog.categoryName}"</span>?
-                </p>
-                {!deleteConfirmDialog.parentId && (
-                  <p className="text-sm text-amber-600 mt-2 bg-amber-50 p-2 rounded">
-                    ⚠️ Xóa danh mục chính sẽ xóa tất cả danh mục con bên trong.
-                  </p>
-                )}
-              </div>
+                        {/* Ingredient List */}
+                        <div className="space-y-2">
+                          {recipe.ingredients.map((ingredientText, index) => {
+                            // Parse ingredient string: "số_lượng đơn_vị tên_nguyên_liệu"
+                            const parts = ingredientText.trim().split(' ')
+                            let quantity = ''
+                            let unit = ''
+                            let name = ''
+                            
+                            if (parts.length >= 3) {
+                              // Tìm số lượng (phần đầu tiên có chứa số)
+                              const quantityMatch = parts[0].match(/[\d.,]+/)
+                              if (quantityMatch) {
+                                quantity = quantityMatch[0]
+                                // Lấy phần còn lại của parts[0] làm đơn vị nếu có
+                                const remainingUnit = parts[0].replace(quantityMatch[0], '')
+                                if (remainingUnit) {
+                                  unit = remainingUnit
+                                  name = parts.slice(1).join(' ')
+                                } else {
+                                  unit = parts[1]
+                                  name = parts.slice(2).join(' ')
+                                }
+                              } else {
+                                // Fallback: coi toàn bộ làm tên
+                                name = ingredientText
+                              }
+                            } else {
+                              name = ingredientText
+                            }
 
-              <div className="flex space-x-3">
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    setDeleteConfirmDialog({ isOpen: false, categoryId: "", categoryName: "", parentId: "" })
-                  }
-                  className="flex-1"
-                >
-                  Hủy bỏ
-                </Button>
-                <Button
-                  onClick={() =>
-                    handleDeleteCategory(deleteConfirmDialog.categoryId, deleteConfirmDialog.parentId || undefined)
-                  }
-                  className="flex-1 bg-red-600 hover:bg-red-700 text-white"
-                >
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Xóa danh mục
-                </Button>
-              </div>
+                            return (
+                              <div key={index} className="grid grid-cols-12 gap-4 items-center px-4 py-3 border rounded-lg hover:bg-gray-50">
+                                {/* STT */}
+                                <div className="col-span-1">
+                                  <span className="text-sm font-medium text-gray-600">{index + 1}</span>
+                                </div>
+
+                                {/* Tên nguyên liệu - Chỉ hiển thị */}
+                                <div className="col-span-6">
+                                  <div className="p-2 bg-gray-100 rounded border">
+                                    <span className="text-gray-800 font-medium">{name || ingredientText}</span>
+                                  </div>
+                                </div>
+
+                                {/* Số lượng - Chỉ hiển thị */}
+                                <div className="col-span-2">
+                                  <div className="p-2 bg-gray-100 rounded border text-center">
+                                    <span className="text-gray-800 font-medium">{quantity || '-'}</span>
+                                  </div>
+                                </div>
+
+                                {/* Đơn vị - Chỉ hiển thị */}
+                                <div className="col-span-2">
+                                  <div className="p-2 bg-gray-100 rounded border text-center">
+                                    <span className="text-gray-800 font-medium">{unit || '-'}</span>
+                                  </div>
+                                </div>
+
+                                {/* Nút xóa */}
+                                <div className="col-span-1">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => removeIngredient(index)}
+                                    className="text-red-600 hover:text-red-800 hover:bg-red-50 p-1"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </>
+                    ) : (
+                      /* Empty State */
+                      <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-lg">
+                        <div className="text-4xl mb-4">🥗</div>
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">Chưa có nguyên liệu nào</h3>
+                        <p className="text-gray-600 mb-4">Nhấn "Chọn nguyên liệu" để thêm nguyên liệu cho công thức</p>
+                        <Button
+                          type="button"
+                          onClick={() => setIsIngredientSelectOpen(true)}
+                          className="bg-blue-500 hover:bg-blue-600"
+                        >
+                          <Search className="w-4 h-4 mr-2" />
+                          Chọn nguyên liệu đầu tiên
+                        </Button>
+                      </div>
+                    )}
+                    {errors.ingredients && <p className="text-red-500 text-sm mt-2">{errors.ingredients}</p>}
+                  </div>
+                </CardContent>
+            </Card>
+
+            {/* Instructions */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span>Cách làm</span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleAddInstruction}
+                    className="bg-orange-500 hover:bg-orange-600"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Thêm bước
+                  </Button>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {detailedInstructions.map((instruction, index) => (
+                    <div key={index} className="border rounded-lg p-4 bg-gray-50">
+                      <div className="flex items-start gap-4">
+                        <div className="flex-shrink-0 w-8 h-8 bg-orange-500 text-white rounded-full flex items-center justify-center font-semibold">
+                          {instruction.step}
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <h4 className="font-medium">Bước {instruction.step}</h4>
+                            {instruction.time && (
+                              <div className="flex items-center gap-1 text-sm text-gray-600">
+                                <Clock className="w-3 h-3" />
+                                <span>{instruction.time}</span>
+                              </div>
+                            )}
+                          </div>
+                          <p className="text-gray-700 mb-2">{instruction.description}</p>
+                          {instruction.image && (
+                            <Image
+                              src={instruction.image}
+                              alt={`Bước ${instruction.step}`}
+                              width={150}
+                              height={100}
+                              className="rounded object-cover"
+                            />
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleEditInstruction(index)}
+                            className="text-blue-600 hover:bg-blue-50"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => removeInstruction(index)}
+                            className="text-red-600 hover:bg-red-50"
+                            disabled={detailedInstructions.length === 1}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {errors.instructions && <p className="text-red-500 text-sm">{errors.instructions}</p>}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Form Error */}
+            {errors.form && <p className="text-red-500 text-sm">{errors.form}</p>}
+
+            {/* Submit Buttons */}
+            <div className="flex justify-end space-x-4 pb-8">
+              <Button type="button" variant="outline" onClick={() => router.back()}>
+                Hủy
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={isLoading || loadingCategories || loadingIngredients} 
+                className="bg-orange-500 hover:bg-orange-600"
+              >
+                <Save className="w-4 h-4 mr-2" />
+                {isLoading ? "Đang lưu..." : "Tạo công thức"}
+              </Button>
             </div>
-          </div>
+          </form>
         </div>
-      )}
-    </div>
+      </div>
+
+      {/* Ingredient Select Modal */}
+      <IngredientSelectModal
+        isOpen={isIngredientSelectOpen}
+        onClose={() => setIsIngredientSelectOpen(false)}
+        onSelect={addIngredientFromSelect}
+        ingredients={ingredients}
+      />
+
+      {/* Instruction Add Modal */}
+      <InstructionAddModal
+        isOpen={isInstructionModalOpen}
+        onClose={() => setIsInstructionModalOpen(false)}
+        onSave={handleSaveInstruction}
+        stepNumber={editingInstructionIndex !== null ? editingInstructionIndex + 1 : detailedInstructions.length + 1}
+        editingInstruction={
+          editingInstructionIndex !== null ? detailedInstructions[editingInstructionIndex] : undefined
+        }
+      />
+    </>
   )
 }

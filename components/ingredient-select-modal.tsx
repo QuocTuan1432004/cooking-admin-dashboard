@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Search, Plus, Check } from "lucide-react"
-import type { Ingredient } from "./ingredient-add-modal"
+import type { Ingredient } from "@/hooks/RecipeApi/recipeTypes"
 
 interface SelectedIngredient {
   ingredient: Ingredient
@@ -27,7 +27,7 @@ export function IngredientSelectModal({ isOpen, onClose, onSelect, ingredients }
 
   // Filter ingredients based on search term
   const filteredIngredients = useMemo(() => {
-    return ingredients.filter((ingredient) => ingredient.name.toLowerCase().includes(searchTerm.toLowerCase()))
+    return ingredients.filter((ingredient) => ingredient.ingredientName.toLowerCase().includes(searchTerm.toLowerCase()))
   }, [ingredients, searchTerm])
 
   const handleAddIngredient = (ingredient: Ingredient) => {
@@ -44,17 +44,17 @@ export function IngredientSelectModal({ isOpen, onClose, onSelect, ingredients }
     }
   }
 
-  const handleRemoveIngredient = (ingredientId: number) => {
+  const handleRemoveIngredient = (ingredientId: string | number) => {
     setSelectedIngredients(selectedIngredients.filter((item) => item.ingredient.id !== ingredientId))
   }
 
-  const handleQuantityChange = (ingredientId: number, quantity: string) => {
+  const handleQuantityChange = (ingredientId: string | number, quantity: string) => {
     setSelectedIngredients(
       selectedIngredients.map((item) => (item.ingredient.id === ingredientId ? { ...item, quantity } : item)),
     )
   }
 
-  const handleUnitChange = (ingredientId: number, unit: string) => {
+  const handleUnitChange = (ingredientId: string | number, unit: string) => {
     setSelectedIngredients(
       selectedIngredients.map((item) => (item.ingredient.id === ingredientId ? { ...item, unit } : item)),
     )
@@ -64,7 +64,8 @@ export function IngredientSelectModal({ isOpen, onClose, onSelect, ingredients }
     const validIngredients = selectedIngredients.filter((item) => item.quantity.trim())
 
     validIngredients.forEach((item) => {
-      const ingredientText = `${item.quantity}${item.unit} ${item.ingredient.name}`
+      // Sử dụng MeasurementUnit từ ingredient thay vì unit có thể thay đổi
+      const ingredientText = `${item.quantity} ${item.ingredient.measurementUnit} ${item.ingredient.ingredientName}`
       onSelect(ingredientText)
     })
 
@@ -80,7 +81,7 @@ export function IngredientSelectModal({ isOpen, onClose, onSelect, ingredients }
     onClose()
   }
 
-  const isIngredientSelected = (ingredientId: number) => {
+  const isIngredientSelected = (ingredientId: string | number) => {
     return selectedIngredients.some((item) => item.ingredient.id === ingredientId)
   }
 
@@ -131,8 +132,8 @@ export function IngredientSelectModal({ isOpen, onClose, onSelect, ingredients }
                   {filteredIngredients.map((ingredient) => (
                     <div key={ingredient.id} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded">
                       <div>
-                        <span className="font-medium">{ingredient.name}</span>
-                        <span className="text-sm text-gray-500 ml-2">({ingredient.calories} calo/100g)</span>
+                        <span className="font-medium">{ingredient.ingredientName}</span>
+                        <span className="text-sm text-gray-500 ml-2">({ingredient.caloriesPerUnit} calo/ {ingredient.measurementUnit})</span>
                       </div>
                       <Button
                         size="sm"
@@ -165,8 +166,8 @@ export function IngredientSelectModal({ isOpen, onClose, onSelect, ingredients }
                 {selectedIngredients.map((item) => (
                   <div key={item.ingredient.id} className="flex items-center gap-2 p-2 border rounded">
                     <div className="flex-1">
-                      <span className="font-medium">{item.ingredient.name}</span>
-                      <span className="text-sm text-gray-500 ml-1">({item.ingredient.calories} calo/100g)</span>
+                      <span className="font-medium">{item.ingredient.ingredientName}</span>
+                      <span className="text-sm text-gray-500 ml-1">({item.ingredient.caloriesPerUnit} calo/ {item.ingredient.measurementUnit})</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Input
@@ -178,21 +179,7 @@ export function IngredientSelectModal({ isOpen, onClose, onSelect, ingredients }
                         className="w-20"
                         placeholder="Số lượng"
                       />
-                      <select
-                        value={item.unit}
-                        onChange={(e) => handleUnitChange(item.ingredient.id, e.target.value)}
-                        className="px-2 py-1 border rounded text-sm"
-                      >
-                        <option value="g">g</option>
-                        <option value="kg">kg</option>
-                        <option value="ml">ml</option>
-                        <option value="l">l</option>
-                        <option value="muỗng canh">muỗng canh</option>
-                        <option value="muỗng cà phê">muỗng cà phê</option>
-                        <option value="củ">củ</option>
-                        <option value="quả">quả</option>
-                        <option value="con">con</option>
-                      </select>
+          
                       <Button
                         size="sm"
                         variant="outline"

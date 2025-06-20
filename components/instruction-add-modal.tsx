@@ -8,12 +8,14 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Save, Upload, X, Clock } from 'lucide-react'
 import Image from "next/image"
+import { RecipeStepsCreationRequest } from "@/hooks/RecipeApi/recipeTypes"
 
 export interface Instruction {
   step: number
   description: string
   time?: string
-  image?: string
+  image?: string // Dùng cho image preview URL (string)
+  imageFile?: File // Dùng cho đối tượng File thực tế
 }
 
 interface InstructionAddModalProps {
@@ -33,7 +35,8 @@ export function InstructionAddModal({
 }: InstructionAddModalProps) {
   const [description, setDescription] = useState(editingInstruction?.description || "")
   const [time, setTime] = useState(editingInstruction?.time || "")
-  const [image, setImage] = useState(editingInstruction?.image || "")
+  const [image, setImage] = useState(editingInstruction?.image || "") // State cho image preview URL (string)
+  const [actualImageFile, setActualImageFile] = useState<File | undefined>(editingInstruction?.imageFile) // State mới cho File object
   const [imagePreview, setImagePreview] = useState<string | null>(editingInstruction?.image || null)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [dragActive, setDragActive] = useState(false)
@@ -57,13 +60,15 @@ export function InstructionAddModal({
     onSave({
       description: description.trim(),
       time: time.trim() || undefined,
-      image: image || undefined,
+      image: imagePreview || undefined, // Gửi URL preview nếu cần, hoặc có thể bỏ nếu không dùng ở page.tsx
+      imageFile: actualImageFile // Gửi File object thực tế hoặc undefined
     })
 
     // Reset form
     setDescription("")
     setTime("")
     setImage("")
+    setActualImageFile(undefined) // Reset state mới
     setImagePreview(null)
     setErrors({})
     onClose()
@@ -73,6 +78,7 @@ export function InstructionAddModal({
     setDescription(editingInstruction?.description || "")
     setTime(editingInstruction?.time || "")
     setImage(editingInstruction?.image || "")
+    setActualImageFile(editingInstruction?.imageFile) // Reset File object
     setImagePreview(editingInstruction?.image || null)
     setErrors({})
     onClose()
@@ -80,11 +86,12 @@ export function InstructionAddModal({
 
   const handleImageUpload = (file: File) => {
     if (file && file.type.startsWith("image/")) {
+      setActualImageFile(file) // Lưu File object
       const reader = new FileReader()
       reader.onload = (e) => {
         const result = e.target?.result as string
         setImagePreview(result)
-        setImage(result)
+        setImage(result) // Vẫn giữ để hiển thị preview nếu cần
       }
       reader.readAsDataURL(file)
     }
@@ -215,6 +222,7 @@ export function InstructionAddModal({
                       onClick={() => {
                         setImagePreview(null)
                         setImage("")
+                        setActualImageFile(undefined) // Xóa File object
                       }}
                     >
                       <X className="w-4 h-4" />
