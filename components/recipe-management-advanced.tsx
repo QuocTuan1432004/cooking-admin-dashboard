@@ -23,12 +23,12 @@ interface RecipeManagementAdvancedProps {
   onAddRecipe?: () => void
   onEditIngredients?: () => void
   onDeleteIngredients?: () => void
-  // Cập nhật props để sử dụng string
   currentPage?: number
   totalPages?: number
   onPageChange?: (page: number) => void
-  onStatusChange?: (recipeId: string) => void // Thay đổi từ number thành string
-  onDeleteRecipe?: (recipeId: string) => void // Thay đổi từ number thành string
+  onApproveRecipe?: (recipeId: string) => void // ← Separate approve
+  onRejectRecipe?: (recipeId: string, reason: string) => void // ← Separate reject
+  onDeleteRecipe?: (recipeId: string) => void
 }
 
 export function RecipeManagementAdvanced({
@@ -45,7 +45,8 @@ export function RecipeManagementAdvanced({
   currentPage: propCurrentPage,
   totalPages: propTotalPages,
   onPageChange: propOnPageChange,
-  onStatusChange,
+  onApproveRecipe: propOnApproveRecipe, // ← New prop
+  onRejectRecipe: propOnRejectRecipe, // ← New prop
   onDeleteRecipe: propOnDeleteRecipe,
 }: RecipeManagementAdvancedProps) {
   // Modal states
@@ -106,13 +107,12 @@ export function RecipeManagementAdvanced({
     }
   }
 
+  // Update the handlers to use the new props
   const handleApproveRecipe = (recipeId: string) => {
-    // Thay đổi từ number thành string
-    if (onStatusChange) {
-      // Sử dụng API status change
-      onStatusChange(recipeId)
+    if (propOnApproveRecipe) {
+      propOnApproveRecipe(recipeId)
     } else {
-      // Local update với status mới
+      // Local fallback
       const updatedRecipes = recipes.map((recipe) =>
         recipe.id === recipeId ? { ...recipe, status: "APPROVED" } : recipe,
       )
@@ -121,12 +121,10 @@ export function RecipeManagementAdvanced({
   }
 
   const handleRejectRecipe = (recipeId: string, reason: string) => {
-    // Thay đổi từ number thành string
-    if (onStatusChange) {
-      // Sử dụng API status change
-      onStatusChange(recipeId)
+    if (propOnRejectRecipe) {
+      propOnRejectRecipe(recipeId, reason)
     } else {
-      // Local update với status mới
+      // Local fallback
       const updatedRecipes = recipes.map((recipe) =>
         recipe.id === recipeId ? { ...recipe, status: "NOT_APPROVED" } : recipe,
       )

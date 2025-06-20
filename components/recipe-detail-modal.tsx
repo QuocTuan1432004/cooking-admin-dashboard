@@ -25,6 +25,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import type { RecipeStepsResponse, RecipeIngredientsResponse } from "@/hooks/RecipeApi/recipeTypes"
 import { getRecipeStepsByRecipeId } from "@/hooks/RecipeApi/recipeSteps"
 import { getRecipeIngredientsByRecipeId } from "@/hooks/RecipeApi/recipeIngredients"
+import { changeRecipeStatusToNotApproved } from "@/hooks/RecipeApi/recipeApi"
 
 export interface Recipe {
   id: string
@@ -137,12 +138,27 @@ export function RecipeDetailModal({
     onClose()
   }
 
-  const handleReject = () => {
-    if (onReject && rejectReason.trim()) {
-      onReject(recipe.id, rejectReason.trim())
-      setRejectReason("")
+  const handleReject = async () => {
+    if (!rejectReason.trim()) {
+      return
     }
-    onClose()
+
+    try {
+
+      await changeRecipeStatusToNotApproved(recipe.id)
+     
+      if (onReject) {
+        onReject(recipe.id, rejectReason.trim())
+      }
+      
+      // Reset form và đóng modal
+      setRejectReason("")
+      onClose()
+
+    } catch (error) {
+      console.error("Error rejecting recipe:", error)
+      // toast.error("Không thể từ chối công thức")
+    }
   }
 
   const getStatusBadge = (status: Recipe["status"]) => {
@@ -158,7 +174,6 @@ export function RecipeDetailModal({
     }
   }
 
-  // const difficultyInfo = getDifficultyInfo(recipe.difficulty)
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>

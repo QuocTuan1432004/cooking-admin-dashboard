@@ -170,7 +170,6 @@ export default function RecipesPage() {
           totalPages={totalPages}
           onPageChange={handlePageChange}
           // API action handlers
-          onStatusChange={handleStatusChange}
           onDeleteRecipe={handleDeleteRecipe}
         />
       </div>

@@ -17,7 +17,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Search, Eye, Edit, Trash2, Filter, SortAsc, SortDesc, AlertTriangle, Calendar, Tag } from "lucide-react"
+import { Search, Eye, Edit, Trash2, SortAsc, SortDesc, AlertTriangle, Tag } from "lucide-react"
 import { Label } from "@/components/ui/label"
 
 // Import Recipe interface từ recipe-detail-modal để đảm bảo consistency
@@ -47,7 +47,6 @@ export function RecipeTableEnhanced({
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [categoryFilter, setCategoryFilter] = useState<string>("all")
-  const [dateFilter, setDateFilter] = useState<string>("all")
   const [deleteRecipeId, setDeleteRecipeId] = useState<string | null>(null)
 
   // Filtering and sorting logic
@@ -65,40 +64,7 @@ export function RecipeTableEnhanced({
     const matchesCategory =
       categoryFilter === "all" || recipeCategory.toLowerCase().includes(categoryFilter.toLowerCase())
 
-    // Date filtering logic
-    let matchesDate = true
-    if (dateFilter !== "all") {
-      const recipeDate = new Date(recipe.date || recipe.createAt || "")
-      const now = new Date()
-
-      switch (dateFilter) {
-        case "today":
-          matchesDate = recipeDate.toDateString() === now.toDateString()
-          break
-        case "week":
-          const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-          matchesDate = recipeDate >= weekAgo
-          break
-        case "month":
-          const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
-          matchesDate = recipeDate >= monthAgo
-          break
-        case "3months":
-          const threeMonthsAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
-          matchesDate = recipeDate >= threeMonthsAgo
-          break
-        case "6months":
-          const sixMonthsAgo = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000)
-          matchesDate = recipeDate >= sixMonthsAgo
-          break
-        case "year":
-          const yearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
-          matchesDate = recipeDate >= yearAgo
-          break
-      }
-    }
-
-    return matchesSearch && matchesStatus && matchesCategory && matchesDate
+    return matchesSearch && matchesStatus && matchesCategory
   })
 
   const sortedRecipes = [...filteredRecipes].sort((a, b) => {
@@ -179,7 +145,6 @@ export function RecipeTableEnhanced({
     setSearchTerm("")
     setStatusFilter("all")
     setCategoryFilter("all")
-    setDateFilter("all")
   }
 
   const getStatusBadge = (status: string) => {
@@ -208,33 +173,24 @@ export function RecipeTableEnhanced({
     <div className="space-y-4">
       {/* Search and Filter Controls */}
       <div className="space-y-4">
-        {/* First Row - Search */}
-        <div className="flex flex-col lg:flex-row gap-4 items-center">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-            <Input
-              placeholder="Tìm kiếm công thức..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
+        {/* Single Row - Search, Status, Category */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 items-end">
+          {/* Search */}
+          <div className="lg:col-span-1">
+            <Label className="text-sm font-medium text-gray-700 mb-2 block">Tìm kiếm</Label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Input
+                placeholder="Tìm kiếm công thức..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
           </div>
 
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={handleClearFilters}>
-              Xóa bộ lọc
-            </Button>
-            {/* <Button variant="outline" size="sm">
-              <Filter className="h-4 w-4 mr-2" />
-              Lọc
-            </Button> */}
-          </div>
-        </div>
-
-        {/* Second Row - Filters */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Status Filter */}
-          <div>
+          <div className="lg:col-span-1">
             <Label className="text-sm font-medium text-gray-700 mb-2 block">Trạng thái</Label>
             <select
               value={statusFilter}
@@ -249,7 +205,7 @@ export function RecipeTableEnhanced({
           </div>
 
           {/* Category Filter */}
-          <div>
+          <div className="lg:col-span-1">
             <Label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
               <Tag className="w-4 h-4" />
               Danh mục
@@ -268,30 +224,16 @@ export function RecipeTableEnhanced({
             </select>
           </div>
 
-          {/* Date Filter */}
-          <div>
-            <Label className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
-              <Calendar className="w-4 h-4" />
-              Ngày đăng
-            </Label>
-            <select
-              value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value)}
-              className="w-full px-3 py-2 border rounded-md"
-            >
-              <option value="all">Tất cả thời gian</option>
-              <option value="today">Hôm nay</option>
-              <option value="week">Tuần này</option>
-              <option value="month">Tháng này</option>
-              <option value="3months">3 tháng qua</option>
-              <option value="6months">6 tháng qua</option>
-              <option value="year">Năm nay</option>
-            </select>
+          {/* Clear Filters Button */}
+          <div className="lg:col-span-1">
+            <Button variant="outline" size="sm" onClick={handleClearFilters} className="w-full">
+              Xóa bộ lọc
+            </Button>
           </div>
         </div>
 
         {/* Active Filters Display */}
-        {(searchTerm || statusFilter !== "all" || categoryFilter !== "all" || dateFilter !== "all") && (
+        {(searchTerm || statusFilter !== "all" || categoryFilter !== "all") && (
           <div className="flex flex-wrap gap-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
             <span className="text-sm font-medium text-blue-800">Bộ lọc đang áp dụng:</span>
             {searchTerm && (
@@ -308,18 +250,6 @@ export function RecipeTableEnhanced({
             {categoryFilter !== "all" && (
               <Badge variant="outline" className="bg-white">
                 Danh mục: {categoryFilter}
-              </Badge>
-            )}
-            {dateFilter !== "all" && (
-              <Badge variant="outline" className="bg-white">
-                Thời gian:{" "}
-                {dateFilter === "today"
-                  ? "Hôm nay"
-                  : dateFilter === "week"
-                    ? "Tuần này"
-                    : dateFilter === "month"
-                      ? "Tháng này"
-                      : dateFilter}
               </Badge>
             )}
           </div>

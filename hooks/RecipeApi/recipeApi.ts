@@ -79,6 +79,24 @@ export const changeRecipeStatus = async (id: string): Promise<RecipeResponse> =>
   return result.result
 }
 
+export const changeStatusToPending = async (id: string): Promise<RecipeResponse> => {
+  const response = await authenticatedFetch(`${API_BASE_URL}/recipe/changeStatusToPending/${id}`, {
+    method: "POST",
+  })
+
+  const result: ApiResponse<RecipeResponse> = await handleResponse(response)
+  return result.result
+}
+
+export const changeRecipeStatusToNotApproved = async (id: string): Promise<RecipeResponse> => {
+  const response = await authenticatedFetch(`${API_BASE_URL}/recipe/changeStatusToNotApproved/${id}`, {
+    method: "POST",
+  })
+
+  const result: ApiResponse<RecipeResponse> = await handleResponse(response)
+  return result.result
+}
+
 export const deleteRecipe = async (id: string): Promise<string> => {
   const response = await authenticatedFetch(`${API_BASE_URL}/recipe/deleteRecipe/${id}`, {
     method: "DELETE",

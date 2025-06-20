@@ -13,15 +13,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Save, X, Search, Edit, ChefHat, Loader2, Clock } from "lucide-react"
 import Image from "next/image"
 import { toast } from "sonner"
+import { Badge } from "@/components/ui/badge"
 
 // Import API functions
-import { updateRecipe } from "@/hooks/RecipeApi/recipeApi"
+import { updateRecipe, changeRecipeStatus, changeRecipeStatusToNotApproved, changeStatusToPending } from "@/hooks/RecipeApi/recipeApi"
 import {
   getRecipeIngredientsByRecipeId,
   createRecipeIngredient,
   deleteRecipeIngredient,
 } from "@/hooks/RecipeApi/recipeIngredients"
-import { getRecipeStepsByRecipeId, createRecipeStep, deleteRecipeStep, updateRecipeStep } from "@/hooks/RecipeApi/recipeSteps"
+import {
+  getRecipeStepsByRecipeId,
+  createRecipeStep,
+  deleteRecipeStep,
+  updateRecipeStep,
+} from "@/hooks/RecipeApi/recipeSteps"
 import { getAllMainCategories, getSubCategoriesByMainId } from "@/hooks/categoryApi/categoryApi"
 import { getAllIngredients } from "@/hooks/RecipeApi/ingredientsApi"
 
@@ -368,6 +374,26 @@ export function RecipeEditModalImproved({ recipe, isOpen, onClose, onSave }: Rec
       // Update recipe basic info
       await updateRecipe(editingRecipe.id, updateData, imageFile as File)
 
+      // Update status nếu có thay đổi
+      if (recipe && editingRecipe.status !== recipe.status) {
+        try {
+          if (editingRecipe.status === "APPROVED") {
+            await changeRecipeStatus(editingRecipe.id)
+            toast.success("Đã cập nhật trạng thái thành 'Đã duyệt'")
+          } else if (editingRecipe.status === "NOT_APPROVED") {
+            await changeRecipeStatusToNotApproved(editingRecipe.id)
+            toast.success("Đã cập nhật trạng thái thành 'Từ chối'")
+          }else if (editingRecipe.status === "PENDING") {
+            await changeStatusToPending(editingRecipe.id)
+            toast.success("Đã cập nhật trạng thái thành 'Đang chờ duyệt'")
+          }
+          // PENDING không cần API call đặc biệt
+        } catch (statusError) {
+          console.error("Error updating status:", statusError)
+          toast.warning("Cập nhật công thức thành công nhưng không thể thay đổi trạng thái")
+        }
+      }
+
       // Update steps với ảnh
       await updateRecipeStepsWithImages(editingRecipe.id, detailedInstructions)
 
@@ -417,52 +443,49 @@ export function RecipeEditModalImproved({ recipe, isOpen, onClose, onSave }: Rec
 
       // Lấy tất cả steps hiện tại
       const currentSteps = [...recipeSteps].sort((a, b) => a.step - b.step)
-      
+
       // Xử lý từng instruction
       for (let i = 0; i < processedInstructions.length; i++) {
         const instruction = processedInstructions[i]
         const stepNumber = i + 1
-        const existingStep = currentSteps.find(step => step.step === stepNumber)
-        
+        const existingStep = currentSteps.find((step) => step.step === stepNumber)
+
         if (instruction.description.trim()) {
-          
           if (existingStep) {
             // Update existing step
             console.log(`Updating step ${stepNumber}`)
-            
+
             const updateData: RecipeStepsUpdateRequest = {
               step: stepNumber,
               description: instruction.description,
               waitingTime: instruction.time || "",
             }
-            
+
             // Chỉ gửi file nếu có ảnh mới
             const imageToSend = instruction.imageFile || undefined
             await updateRecipeStep(recipeId, stepNumber, updateData, imageToSend)
-            
           } else {
             // Create new step
             console.log(`Creating step ${stepNumber}`)
-            
+
             const createData: RecipeStepsCreationRequest = {
               step: stepNumber,
               description: instruction.description,
               waitingTime: instruction.time || "",
             }
-            
+
             const imageToSend = instruction.imageFile || undefined
             await createRecipeStep(recipeId, createData, imageToSend)
           }
         }
       }
-      
+
       // Xóa các steps thừa (nếu có)
-      const stepsToDelete = currentSteps.filter(step => step.step > processedInstructions.length)
+      const stepsToDelete = currentSteps.filter((step) => step.step > processedInstructions.length)
       for (const step of stepsToDelete) {
         console.log(`Deleting excess step ${step.step}`)
         await deleteRecipeStep(step.id)
       }
-      
     } catch (error) {
       console.error("Error updating steps with images:", error)
       throw error
@@ -769,7 +792,7 @@ export function RecipeEditModalImproved({ recipe, isOpen, onClose, onSave }: Rec
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 gap-4">
+                    <div className="grid grid-cols-2 gap-4">
                       <div>
                         <Label className="text-sm font-medium">Thời gian nấu</Label>
                         <Input
@@ -778,6 +801,50 @@ export function RecipeEditModalImproved({ recipe, isOpen, onClose, onSave }: Rec
                           className="mt-1"
                           placeholder="VD: 30 phút"
                         />
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium">Trạng thái công thức</Label>
+                        <div className="mt-1 space-y-2">
+                          <Select
+                            value={editingRecipe.status || ""}
+                            onValueChange={(value) => updateEditingRecipe("status", value)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Chọn trạng thái" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="PENDING">
+                                <div className="flex items-center gap-2">
+                                  <Badge className="bg-yellow-500 text-white text-xs">Chờ duyệt</Badge>
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="APPROVED">
+                                <div className="flex items-center gap-2">
+                                  <Badge className="bg-green-500 text-white text-xs">Đã duyệt</Badge>
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="NOT_APPROVED">
+                                <div className="flex items-center gap-2">
+                                  <Badge className="bg-red-500 text-white text-xs">Từ chối</Badge>
+                                </div>
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+
+                          {/* Hiển thị trạng thái hiện tại */}
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-600">Hiện tại:</span>
+                            {editingRecipe.status === "APPROVED" && (
+                              <Badge className="bg-green-500 text-white text-xs">Đã duyệt</Badge>
+                            )}
+                            {editingRecipe.status === "NOT_APPROVED" && (
+                              <Badge className="bg-red-500 text-white text-xs">Từ chối</Badge>
+                            )}
+                            {editingRecipe.status === "PENDING" && (
+                              <Badge className="bg-yellow-500 text-white text-xs">Chờ duyệt</Badge>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
 
