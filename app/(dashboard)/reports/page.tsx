@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Header } from "@/components/ui/header";
+import { Header } from "@/components/header"
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -387,8 +387,6 @@ export default function ReportsPage() {
       <Header
         title="Quản lý Báo cáo"
         showSearch={false}
-        userName="Nguyễn Huỳnh Quốc Tuấn"
-        onLogout={handleLogout}
         notificationCount={unreadNotifications}
       />
 

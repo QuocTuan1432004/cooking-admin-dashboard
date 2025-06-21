@@ -98,6 +98,12 @@ export const deleteMainCategory = async (id: string) => {
   return handleResponse(response);
 };
 
+export const countAllMainCategories = async (): Promise<number> => {
+  const response = await authenticatedFetch(`${API_BASE_URL}/countAllMainCategory`); 
+  const data = await handleResponse(response);
+  return data.count || 0;
+}
+
 // Sub Category API
 export const createSubCategory = async (mainCategoryId: string, subCategoryName: string, file?: File) => {
   const formData = new FormData();
@@ -137,4 +143,10 @@ export const deleteSubCategory = async (id: string) => {
     method: 'DELETE',
   });
   return handleResponse(response);
+};
+
+export const countAllSubCategories = async (): Promise<number> => {
+  const response = await authenticatedFetch(`${API_BASE_URL}/countAllSubCategory`);
+  const data = await handleResponse(response);
+  return data.count || 0;
 };

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Header } from "@/components/ui/header";
+import { Header } from "@/components/header"
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -601,8 +601,6 @@ export default function CommentsPage() {
           <Header
             title="Quản lý Bình luận"
             showSearch={false}
-            userName="Nguyễn Huỳnh Quốc Tuấn"
-            onLogout={handleLogout}
             notificationCount={3}
           />
 

@@ -18,7 +18,7 @@ interface HeaderProps {
 export function Header({
   title,
   showSearch = true,
-  userName = "Admin User",
+  userName = "LetMeCook Admin",
   userAvatar,
   notificationCount = 0,
 }: HeaderProps) {
@@ -70,7 +70,7 @@ export function Header({
           <div className="flex items-center space-x-2">
             <Avatar className="w-8 h-8">
               <AvatarImage
-                src={userAvatar || "LogoNoImage.png"}
+                src={userAvatar || "/LogoNoName.png"}
                 alt={userName}
               />
               <AvatarFallback className="bg-orange-500 text-white text-sm">
