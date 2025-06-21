@@ -134,7 +134,9 @@ export default function Dashboard() {
               <div>
                 <p className="text-sm text-gray-600">Quản lý người dùng</p>
                 <p className="font-semibold">
-                  {loading ? "Đang tải..." : `${totalUsers.toLocaleString()} người dùng`}
+                  {loading
+                    ? "Đang tải..."
+                    : `${totalUsers.toLocaleString()} người dùng`}
                 </p>
               </div>
             </div>
