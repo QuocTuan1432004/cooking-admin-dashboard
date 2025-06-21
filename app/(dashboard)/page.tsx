@@ -14,11 +14,18 @@ import {
 import type { Recipe } from "@/components/recipe-detail-modal";
 import { RecipeManagement } from "@/components/recipe-management";
 import { useAccountsApi } from "@/hooks/accountApi";
+import { countAllNotApprovedRecipes, countAllPendingRecipes, countAllRecipes } from "@/hooks/RecipeApi/recipeApi";
+import { countAllApprovedRecipes } from "@/hooks/RecipeApi/recipeApi";
+import { set } from "date-fns";
 
 export default function Dashboard() {
   const { getAllAccounts } = useAccountsApi();
   const [unreadNotifications] = useState(3);
   const [totalUsers, setTotalUsers] = useState(0);
+  const [totalRecipes, setTotalRecipes] = useState(0);
+  const [totalPendingRecipes, setTotalPendingRecipes] = useState(0);
+  const [totalNotApprovedRecipes, setTotalNotApprovedRecipes] = useState(0);
+  const [totalApprovedRecipes, setTotalApprovedRecipes] = useState(0);
   const [loading, setLoading] = useState(true);
 
   // Fetch total users count
@@ -31,55 +38,39 @@ export default function Dashboard() {
       setLoading(true);
       const response = await getAllAccounts(0, 1); // Get first page to get totalElements
       setTotalUsers(response.totalElements);
+
+      const recipeCount = await countAllRecipes();
+      setTotalRecipes(recipeCount);
+
+      const approvedRecipeCount = await countAllApprovedRecipes();
+      setTotalApprovedRecipes(approvedRecipeCount);
+      
+      const countPendingRecipes= await countAllPendingRecipes();
+      setTotalPendingRecipes(countPendingRecipes);
+
+      const countNotApprovedRecipes = await countAllNotApprovedRecipes();
+      setTotalNotApprovedRecipes(countNotApprovedRecipes);
+
     } catch (error) {
       console.error("Failed to fetch dashboard data:", error);
       setTotalUsers(0);
+      setTotalRecipes(0);
+      setTotalApprovedRecipes(0);
     } finally {
       setLoading(false);
     }
   };
 
-  const [pendingRecipes, setPendingRecipes] = useState<Recipe[]>([
-    {
-      id: 1,
-      name: "Rau muống xào tỏi",
-      category: "Món xào",
-      author: "Lê Văn Cường",
-      date: "14/05/2025",
-      image: "/placeholder.svg?height=50&width=50",
-      isNew: true,
-      status: "pending",
-    },
-    {
-      id: 2,
-      name: "Bún bò Huế",
-      category: "Món nước",
-      author: "Hoàng Văn Em",
-      date: "15/05/2025",
-      image: "/placeholder.svg?height=50&width=50",
-      isNew: false,
-      status: "pending",
-    },
-    {
-      id: 3,
-      name: "Cá kho tộ",
-      category: "Món kho",
-      author: "Nguyễn Thị Phương",
-      date: "15/05/2025",
-      image: "/placeholder.svg?height=50&width=50",
-      isNew: true,
-      status: "pending",
-    },
-  ]);
+
 
   const stats = [
     {
       title: "Tổng số công thức",
-      number: 125,
+      number: totalRecipes, 
       details: [
-        { label: "Đã duyệt", value: 100 },
-        { label: "Chờ duyệt", value: 15, color: "text-yellow-600" },
-        { label: "Bị từ chối", value: 10, color: "text-red-500" },
+        { label: "Đã duyệt", value: totalApprovedRecipes },
+        { label: "Chờ duyệt", value: totalPendingRecipes, color: "text-yellow-600" },
+        { label: "Bị từ chối", value: totalNotApprovedRecipes, color: "text-red-500" },
       ],
     },
     {
@@ -128,7 +119,7 @@ export default function Dashboard() {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Quản lý công thức</p>
-                <p className="font-semibold">125 công thức</p>
+                <p className="font-semibold">{totalRecipes.toLocaleString()} công thức</p>
               </div>
             </div>
           </CardContent>
@@ -229,7 +220,7 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Pending Recipes using the new RecipeManagement component */}
+      {/* Pending Recipes using the new RecipeManagement component
       <RecipeManagement
         recipes={pendingRecipes}
         onRecipeUpdate={setPendingRecipes}
@@ -237,7 +228,7 @@ export default function Dashboard() {
         showFilters={false}
         title="Công thức chờ duyệt"
         onAddRecipe={() => console.log("Add recipe clicked")}
-      />
+      /> */}
     </div>
   );
 }

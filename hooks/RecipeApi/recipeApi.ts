@@ -105,3 +105,31 @@ export const deleteRecipe = async (id: string): Promise<string> => {
   const result: ApiResponse<string> = await handleResponse(response)
   return result.result
 }
+
+export const countAllRecipes = async (): Promise<number> => {
+  const response = await authenticatedFetch(`${API_BASE_URL}/recipe/countAllRecipes`)
+
+  const result: ApiResponse<number> = await handleResponse(response)
+  return result.result
+}
+
+export const countAllApprovedRecipes = async (): Promise<number> => {
+  const response = await authenticatedFetch(`${API_BASE_URL}/recipe/countApprovedRecipes`)
+
+  const result: ApiResponse<number> = await handleResponse(response)
+  return result.result
+}
+
+export const countAllNotApprovedRecipes = async (): Promise<number> => {
+  const response = await authenticatedFetch(`${API_BASE_URL}/recipe/countNotApprovedRecipes`)
+
+  const result: ApiResponse<number> = await handleResponse(response)
+  return result.result
+}
+
+export const countAllPendingRecipes = async (): Promise<number> => {
+  const response = await authenticatedFetch(`${API_BASE_URL}/recipe/countNotApprovedRecipes`)
+
+  const result: ApiResponse<number> = await handleResponse(response)
+  return result.result
+}
