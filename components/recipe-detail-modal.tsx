@@ -25,7 +25,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import type { RecipeStepsResponse, RecipeIngredientsResponse } from "@/hooks/RecipeApi/recipeTypes"
 import { getRecipeStepsByRecipeId } from "@/hooks/RecipeApi/recipeSteps"
 import { getRecipeIngredientsByRecipeId } from "@/hooks/RecipeApi/recipeIngredients"
-import { changeRecipeStatusToNotApproved } from "@/hooks/RecipeApi/recipeApi"
+import { changeRecipeStatus, changeRecipeStatusToNotApproved } from "@/hooks/RecipeApi/recipeApi"
 
 export interface Recipe {
   id: string
@@ -131,9 +131,11 @@ export function RecipeDetailModal({
 
   if (!recipe) return null
 
-  const handleApprove = () => {
+  const handleApprove = async () => {
     if (onApprove) {
       onApprove(recipe.id)
+      await changeRecipeStatus(recipe.id)
+      
     }
     onClose()
   }
