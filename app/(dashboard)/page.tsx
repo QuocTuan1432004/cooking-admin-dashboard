@@ -1,6 +1,6 @@
 "use client";
-
-import { useState, useEffect } from "react";
+import { useNotification } from "../../hooks/NotiApi/NotificationContext"; // Adjusted path to parent directory
+import { useState, useEffect, useCallback } from "react";
 import { Header } from "@/components/header";
 import { StatCard } from "@/components/stat-card";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,12 +14,56 @@ import {
 import type { Recipe } from "@/components/recipe-detail-modal";
 import { RecipeManagement } from "@/components/recipe-management";
 import { useAccountsApi } from "@/hooks/accountApi";
+import { notificationApi, NotificationResponse } from "@/hooks/NotiApi/NotiApi";
+import { useRouter } from "next/navigation";
 
-export default function Dashboard() {
+// Helper function to map notification types
+function mapNotificationType(notificationType: string): string {
+  const typeMap: { [key: string]: string } = {
+    RECIPE_SUBMITTED: "recipe",
+    RECIPE_APPROVED: "success",
+    RECIPE_REJECTED: "error",
+    USER_REGISTERED: "user",
+    COMMENT_ADDED: "comment",
+    SYSTEM_ALERT: "warning",
+  };
+
+  return typeMap[notificationType] || "info";
+}
+
+export default function DashboardPage() {
+  const { unreadCount } = useNotification();
+  const router = useRouter();
   const { getAllAccounts } = useAccountsApi();
-  const [unreadNotifications] = useState(3);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [totalUsers, setTotalUsers] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [notifications, setNotifications] = useState<
+    {
+      id: string;
+      title: string;
+      message: string;
+      date: string;
+      time: string;
+      type: string | void;
+      read: boolean;
+      dismissed: boolean;
+      originalType: string;
+    }[]
+  >([]);
+  const [dismissedNotifications, setDismissedNotifications] = useState<
+    {
+      id: string;
+      title: string;
+      message: string;
+      date: string;
+      time: string;
+      type: string | void;
+      read: boolean;
+      dismissed: boolean;
+      originalType: string;
+    }[]
+  >([]);
 
   // Fetch total users count
   useEffect(() => {
@@ -39,37 +83,142 @@ export default function Dashboard() {
     }
   };
 
+  const handleNewNotification = useCallback(
+    (notification: NotificationResponse) => {
+      console.log("🔔 Nhận thông báo mới qua WebSocket:", notification);
+
+      const newNotification = {
+        id: notification.id,
+        title: notification.title,
+        message: notification.message,
+        date: notification.date,
+        time: notification.time,
+        type: mapNotificationType(notification.notificationType),
+        read: notification.readStatus,
+        dismissed: notification.dismissed,
+        originalType: notification.notificationType,
+      };
+
+      // Kiểm tra trùng lặp và cập nhật state thông báo
+      if (notification.dismissed) {
+        setDismissedNotifications((prev) => {
+          // Kiểm tra xem thông báo này đã tồn tại chưa
+          const exists = prev.some((n) => n.id === newNotification.id);
+          if (exists) {
+            console.log(
+              `⚠️ Bỏ qua thông báo đã ẩn trùng lặp: ${newNotification.id}`
+            );
+            return prev;
+          }
+
+          console.log("✅ Thêm thông báo đã ẩn mới vào state");
+          return [newNotification, ...prev];
+        });
+      } else {
+        setNotifications((prev) => {
+          // Kiểm tra xem thông báo này đã tồn tại chưa
+          const exists = prev.some((n) => n.id === newNotification.id);
+          if (exists) {
+            console.log(`⚠️ Bỏ qua thông báo trùng lặp: ${newNotification.id}`);
+            return prev;
+          }
+
+          console.log("✅ Thêm thông báo mới vào state");
+          // Thêm thông báo mới vào đầu danh sách
+          return [newNotification, ...prev];
+        });
+
+        // Cập nhật số lượng thông báo chưa đọc nếu thông báo mới chưa đọc
+        if (!notification.readStatus) {
+          setUnreadNotifications((prev) => {
+            console.log(
+              `📊 Cập nhật số thông báo chưa đọc: ${prev} → ${prev + 1}`
+            );
+            return prev + 1;
+          });
+        }
+      }
+    },
+    []
+  ); // Empty dependency array since we don't depend on any props/state
+
+  // Single useEffect for notification handling
+  useEffect(() => {
+    let isSubscribed = true; // Flag to prevent state updates if component unmounted
+
+    const initializeNotifications = async () => {
+      try {
+        // Fetch initial unread notifications count
+        const notifications = await notificationApi.getNotifications();
+
+        if (isSubscribed) {
+          const response = await notificationApi.getNotifications();
+          const count = response.content.filter((n) => !n.readStatus).length;
+          setUnreadNotifications(count);
+          console.log(`📊 Initial unread notifications: ${count}`);
+        }
+
+        // Connect to WebSocket and register callback
+        await notificationApi.connect();
+
+        if (isSubscribed) {
+          // Clear any existing callbacks first
+          notificationApi.unregisterCallback(handleNewNotification);
+          notificationApi.registerCallback(handleNewNotification);
+          console.log("✅ WebSocket connected and callback registered");
+        }
+      } catch (error) {
+        console.error("Failed to initialize notifications:", error);
+      }
+    };
+
+    initializeNotifications();
+
+    // Cleanup function
+    return () => {
+      isSubscribed = false;
+      notificationApi.unregisterCallback(handleNewNotification);
+      console.log("🧹 Cleanup: Unregistered notification callback");
+    };
+  }, []); // Empty dependency array to run only once
+
+  const handleLogout = () => {
+    document.cookie =
+      "auth_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+    router.push("/login");
+  };
+
   const [pendingRecipes, setPendingRecipes] = useState<Recipe[]>([
-    {
-      id: 1,
-      name: "Rau muống xào tỏi",
-      category: "Món xào",
-      author: "Lê Văn Cường",
-      date: "14/05/2025",
-      image: "/placeholder.svg?height=50&width=50",
-      isNew: true,
-      status: "pending",
-    },
-    {
-      id: 2,
-      name: "Bún bò Huế",
-      category: "Món nước",
-      author: "Hoàng Văn Em",
-      date: "15/05/2025",
-      image: "/placeholder.svg?height=50&width=50",
-      isNew: false,
-      status: "pending",
-    },
-    {
-      id: 3,
-      name: "Cá kho tộ",
-      category: "Món kho",
-      author: "Nguyễn Thị Phương",
-      date: "15/05/2025",
-      image: "/placeholder.svg?height=50&width=50",
-      isNew: true,
-      status: "pending",
-    },
+    // {
+    // //   // id: 1,
+    // //   name: "Rau muống xào tỏi",
+    // //   category: "Món xào",
+    // //   author: "Lê Văn Cường",
+    // //   date: "14/05/2025",
+    // //   image: "/placeholder.svg?height=50&width=50",
+    // //   isNew: true,
+    // //   status: "pending",
+    // // },
+    // {
+    //   id: 2,
+    //   name: "Bún bò Huế",
+    //   category: "Món nước",
+    //   author: "Hoàng Văn Em",
+    //   date: "15/05/2025",
+    //   image: "/placeholder.svg?height=50&width=50",
+    //   isNew: false,
+    //   status: "pending",
+    // },
+    // {
+    //   id: 3,
+    //   name: "Cá kho tộ",
+    //   category: "Món kho",
+    //   author: "Nguyễn Thị Phương",
+    //   date: "15/05/2025",
+    //   image: "/placeholder.svg?height=50&width=50",
+    //   isNew: true,
+    //   status: "pending",
+    // },
   ]);
 
   const stats = [
@@ -115,7 +264,7 @@ export default function Dashboard() {
       <Header
         title="Tổng quan"
         userName="Nguyễn Huỳnh Quốc Tuấn"
-        notificationCount={unreadNotifications}
+        notificationCount={unreadCount}
       />
 
       {/* Quick Actions */}

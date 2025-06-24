@@ -1,4 +1,5 @@
 "use client";
+import { useNotification } from "../../../hooks/NotiApi/NotificationContext"; // Adjusted path to parent directory
 
 import { useEffect, useState } from "react";
 import { Header } from "@/components/ui/header";
@@ -13,6 +14,7 @@ import {
   updateCommentStatus,
   getTotalCommentReports,
 } from "../../../hooks/commentApi/commentApi";
+import { notificationApi } from "@/hooks/NotiApi/NotiApi"; // Thêm import này
 import {
   Select,
   SelectContent,
@@ -92,7 +94,7 @@ export default function CommentsPage() {
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedComments, setSelectedComments] = useState<string[]>([]);
-
+  const { unreadCount } = useNotification();
   // Filter states
   const [tempSearchTerm, setTempSearchTerm] = useState("");
   const [tempSelectedRecipe, setTempSelectedRecipe] = useState("all");
@@ -128,6 +130,9 @@ export default function CommentsPage() {
 
   const [commentReportCount, setCommentReportCount] = useState<number>(0);
 
+  // Thêm state để lưu số lượng thông báo chưa đọc
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+
   useEffect(() => {
     const fetchCommentReports = async () => {
       try {
@@ -142,15 +147,15 @@ export default function CommentsPage() {
   }, []);
 
   const fetchTotalReportedCount = async (): Promise<number> => {
-      try {
-        const totalReports = await getTotalCommentReports(); // <-- GỌI API MỚI
-        console.log("Total reported comments from API:", totalReports);
-        return totalReports;
-      } catch (error) {
-        console.error("Failed to fetch total reported comments:", error);
-        return 0;
-      }
-    };
+    try {
+      const totalReports = await getTotalCommentReports(); // <-- GỌI API MỚI
+      console.log("Total reported comments from API:", totalReports);
+      return totalReports;
+    } catch (error) {
+      console.error("Failed to fetch total reported comments:", error);
+      return 0;
+    }
+  };
 
   const handleLogout = () => {
     console.log("Đăng xuất thành công");
@@ -216,15 +221,19 @@ export default function CommentsPage() {
           break;
         }
 
-        const mappedComments = response.content.map((comment: CommentResponse) => ({
-          id: comment.id,
-          user: comment.username || "Unknown User",
-          recipe: comment.recipeTitle || "Unknown Recipe",
-          content: comment.commentText || "No content",
-          date: comment.createdAt ? formatDateToYYYYMMDD(comment.createdAt) : "Unknown Date",
-          status: comment.status || "PENDING",
-          reported: comment.reported || false,
-        }));
+        const mappedComments = response.content.map(
+          (comment: CommentResponse) => ({
+            id: comment.id,
+            user: comment.username || "Unknown User",
+            recipe: comment.recipeTitle || "Unknown Recipe",
+            content: comment.commentText || "No content",
+            date: comment.createdAt
+              ? formatDateToYYYYMMDD(comment.createdAt)
+              : "Unknown Date",
+            status: comment.status || "PENDING",
+            reported: comment.reported || false,
+          })
+        );
 
         allComments.push(...mappedComments);
         page++;
@@ -245,15 +254,19 @@ export default function CommentsPage() {
     try {
       const response = await getAllComments(page, size);
       if (response && response.content) {
-        const mappedComments = response.content.map((comment: CommentResponse) => ({
-          id: comment.id,
-          user: comment.username || "Unknown User",
-          recipe: comment.recipeTitle || "Unknown Recipe",
-          content: comment.commentText || "No content",
-          date: comment.createdAt ? formatDateToYYYYMMDD(comment.createdAt) : "Unknown Date",
-          status: comment.status || "PENDING",
-          reported: comment.reported || false,
-        }));
+        const mappedComments = response.content.map(
+          (comment: CommentResponse) => ({
+            id: comment.id,
+            user: comment.username || "Unknown User",
+            recipe: comment.recipeTitle || "Unknown Recipe",
+            content: comment.commentText || "No content",
+            date: comment.createdAt
+              ? formatDateToYYYYMMDD(comment.createdAt)
+              : "Unknown Date",
+            status: comment.status || "PENDING",
+            reported: comment.reported || false,
+          })
+        );
 
         setComments(mappedComments);
         if (page === 0) {
@@ -286,9 +299,15 @@ export default function CommentsPage() {
         }
       }
 
-      const approved = allComments.filter((comment) => comment.status === "APPROVED").length;
-      const pending = allComments.filter((comment) => comment.status === "PENDING").length;
-      const hidden = allComments.filter((comment) => comment.status === "HIDDEN").length;
+      const approved = allComments.filter(
+        (comment) => comment.status === "APPROVED"
+      ).length;
+      const pending = allComments.filter(
+        (comment) => comment.status === "PENDING"
+      ).length;
+      const hidden = allComments.filter(
+        (comment) => comment.status === "HIDDEN"
+      ).length;
 
       // Tính tổng số lượt báo cáo từ tất cả comments
       const totalReportedCount = allComments.reduce((sum, comment) => {
@@ -300,7 +319,12 @@ export default function CommentsPage() {
       setHiddenCount(hidden);
       setReportedCount(totalReportedCount); // Cập nhật tổng báo cáo
 
-      console.log("Stats calculated:", { approved, pending, hidden, totalReported: totalReportedCount });
+      console.log("Stats calculated:", {
+        approved,
+        pending,
+        hidden,
+        totalReported: totalReportedCount,
+      });
     } catch (error) {
       console.error("Failed to fetch all comments for stats:", error);
     }
@@ -314,9 +338,12 @@ export default function CommentsPage() {
 
       // Hoặc lấy từ comments API
       const allCommentsResponse = await getAllComments(0, 1000);
-      const totalReportedFromComments = allCommentsResponse.content.reduce((sum, comment) => {
-        return sum + (comment.reportedCount || 0);
-      }, 0);
+      const totalReportedFromComments = allCommentsResponse.content.reduce(
+        (sum, comment) => {
+          return sum + (comment.reportedCount || 0);
+        },
+        0
+      );
 
       setReportedCount(totalReportedFromComments);
     } catch (error) {
@@ -324,9 +351,15 @@ export default function CommentsPage() {
     }
   };
   const updateStats = (comments: Comment[]) => {
-    const approved = comments.filter((comment) => comment.status === "APPROVED").length;
-    const pending = comments.filter((comment) => comment.status === "PENDING").length;
-    const hidden = comments.filter((comment) => comment.status === "HIDDEN").length;
+    const approved = comments.filter(
+      (comment) => comment.status === "APPROVED"
+    ).length;
+    const pending = comments.filter(
+      (comment) => comment.status === "PENDING"
+    ).length;
+    const hidden = comments.filter(
+      (comment) => comment.status === "HIDDEN"
+    ).length;
     const reported = comments.filter((comment) => comment.reported).length;
 
     setApprovedCount(approved);
@@ -360,25 +393,68 @@ export default function CommentsPage() {
     }
   }, [currentPage]);
 
+  // Thêm useEffect để lấy số thông báo chưa đọc và lắng nghe thông báo mới
+  useEffect(() => {
+    // Hàm lấy số thông báo chưa đọc
+    const fetchUnreadCount = async () => {
+      try {
+        const response = await notificationApi.getNotifications();
+        const count = response.content.filter((n) => !n.readStatus).length;
+        setUnreadNotifications(count);
+      } catch (error) {
+        console.error("Failed to fetch unread notifications count:", error);
+      }
+    };
+
+    // Lấy số lượng thông báo chưa đọc khi component mount
+    fetchUnreadCount();
+
+    // Đăng ký callback để cập nhật khi có thông báo mới
+    const handleNewNotification = (notification: any) => {
+      if (!notification.readStatus) {
+        setUnreadNotifications((prev) => prev + 1);
+      }
+    };
+
+    // Đảm bảo WebSocket được kết nối
+    notificationApi.connect().then(() => {
+      notificationApi.registerCallback(handleNewNotification);
+    });
+
+    // Cleanup khi component unmount
+    return () => {
+      notificationApi.unregisterCallback(handleNewNotification);
+    };
+  }, []);
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "APPROVED":
         return (
-          <Badge variant="secondary" className="bg-green-100 text-green-800 hover:bg-green-100">
+          <Badge
+            variant="secondary"
+            className="bg-green-100 text-green-800 hover:bg-green-100"
+          >
             <Check className="w-3 h-3 mr-1" />
             Đã duyệt
           </Badge>
         );
       case "HIDDEN":
         return (
-          <Badge variant="secondary" className="bg-gray-100 text-gray-800 hover:bg-gray-100">
+          <Badge
+            variant="secondary"
+            className="bg-gray-100 text-gray-800 hover:bg-gray-100"
+          >
             <EyeOff className="w-3 h-3 mr-1" />
             Ẩn
           </Badge>
         );
       case "PENDING":
         return (
-          <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">
+          <Badge
+            variant="secondary"
+            className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100"
+          >
             <MessageSquare className="w-3 h-3 mr-1" />
             Chờ duyệt
           </Badge>
@@ -469,12 +545,17 @@ export default function CommentsPage() {
 
   const handleSelectComment = (commentId: string) => {
     setSelectedComments((prev) =>
-      prev.includes(commentId) ? prev.filter((id) => id !== commentId) : [...prev, commentId]
+      prev.includes(commentId)
+        ? prev.filter((id) => id !== commentId)
+        : [...prev, commentId]
     );
   };
 
   const handleSelectAll = () => {
-    if (selectedComments.length === filteredComments.length && filteredComments.length > 0) {
+    if (
+      selectedComments.length === filteredComments.length &&
+      filteredComments.length > 0
+    ) {
       setSelectedComments([]);
     } else {
       setSelectedComments(filteredComments.map((comment) => comment.id));
@@ -506,7 +587,10 @@ export default function CommentsPage() {
               successCount++;
             })
             .catch((err) => {
-              console.error(`Failed to update comment ${commentId} status to ${newStatus}:`, err);
+              console.error(
+                `Failed to update comment ${commentId} status to ${newStatus}:`,
+                err
+              );
               failCount++;
             })
         );
@@ -516,7 +600,9 @@ export default function CommentsPage() {
     await Promise.allSettled(operations);
 
     if (failCount > 0) {
-      alert(`Đã hoàn thành hành động hàng loạt với ${successCount} thành công và ${failCount} thất bại.`);
+      alert(
+        `Đã hoàn thành hành động hàng loạt với ${successCount} thành công và ${failCount} thất bại.`
+      );
     } else {
       alert(`Đã hoàn thành hành động hàng loạt cho ${successCount} bình luận.`);
     }
@@ -550,7 +636,9 @@ export default function CommentsPage() {
 
         setComments((prev) =>
           prev.map((comment) =>
-            comment.id === reportingComment.id ? { ...comment, reported: true } : comment
+            comment.id === reportingComment.id
+              ? { ...comment, reported: true }
+              : comment
           )
         );
         setReportedCount((prev) => prev + 1);
@@ -569,10 +657,13 @@ export default function CommentsPage() {
       comment.content.toLowerCase().includes(appliedSearchTerm.toLowerCase()) ||
       comment.user.toLowerCase().includes(appliedSearchTerm.toLowerCase());
     const matchesRecipe =
-      appliedSelectedRecipe === "all" || comment.recipe === appliedSelectedRecipe;
+      appliedSelectedRecipe === "all" ||
+      comment.recipe === appliedSelectedRecipe;
     const matchesStatus =
-      appliedSelectedStatus === "all" || comment.status === appliedSelectedStatus;
-    const matchesDate = !appliedSelectedDate || comment.date === appliedSelectedDate;
+      appliedSelectedStatus === "all" ||
+      comment.status === appliedSelectedStatus;
+    const matchesDate =
+      !appliedSelectedDate || comment.date === appliedSelectedDate;
 
     return matchesSearch && matchesRecipe && matchesStatus && matchesDate;
   });
@@ -603,7 +694,7 @@ export default function CommentsPage() {
             showSearch={false}
             userName="Nguyễn Huỳnh Quốc Tuấn"
             onLogout={handleLogout}
-            notificationCount={3}
+            notificationCount={unreadCount} // Thêm prop này
           />
 
           <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
@@ -611,8 +702,12 @@ export default function CommentsPage() {
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-600">Tổng bình luận</p>
-                    <p className="text-2xl font-bold text-blue-500">{totalComments}</p>
+                    <p className="text-sm font-medium text-gray-600">
+                      Tổng bình luận
+                    </p>
+                    <p className="text-2xl font-bold text-blue-500">
+                      {totalComments}
+                    </p>
                   </div>
                   <MessageSquare className="w-8 h-8 text-blue-600" />
                 </div>
@@ -623,8 +718,12 @@ export default function CommentsPage() {
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-600">Đã duyệt</p>
-                    <p className="text-2xl font-bold text-green-600">{approvedCount}</p>
+                    <p className="text-sm font-medium text-gray-600">
+                      Đã duyệt
+                    </p>
+                    <p className="text-2xl font-bold text-green-600">
+                      {approvedCount}
+                    </p>
                   </div>
                   <Check className="w-8 h-8 text-green-600" />
                 </div>
@@ -635,8 +734,12 @@ export default function CommentsPage() {
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-600">Chờ duyệt</p>
-                    <p className="text-2xl font-bold text-yellow-600">{pendingCount}</p>
+                    <p className="text-sm font-medium text-gray-600">
+                      Chờ duyệt
+                    </p>
+                    <p className="text-2xl font-bold text-yellow-600">
+                      {pendingCount}
+                    </p>
                   </div>
                   <Clock className="w-8 h-8 text-yellow-600" />
                 </div>
@@ -648,7 +751,9 @@ export default function CommentsPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-600">Đã ẩn</p>
-                    <p className="text-2xl font-bold text-gray-600">{hiddenCount}</p>
+                    <p className="text-2xl font-bold text-gray-600">
+                      {hiddenCount}
+                    </p>
                   </div>
                   <EyeOff className="w-8 h-8 text-gray-600" />
                 </div>
@@ -659,8 +764,12 @@ export default function CommentsPage() {
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-600">Bị báo cáo</p>
-                    <p className="text-2xl font-bold text-red-600">{commentReportCount}</p>
+                    <p className="text-sm font-medium text-gray-600">
+                      Bị báo cáo
+                    </p>
+                    <p className="text-2xl font-bold text-red-600">
+                      {commentReportCount}
+                    </p>
                   </div>
                   <Flag className="w-8 h-8 text-red-600" />
                 </div>
@@ -707,8 +816,8 @@ export default function CommentsPage() {
                         <AlertDialogHeader>
                           <AlertDialogTitle>Xác nhận xóa</AlertDialogTitle>
                           <AlertDialogDescription>
-                            Bạn có chắc chắn muốn xóa {selectedComments.length} bình luận đã chọn?
-                            Hành động này không thể hoàn tác.
+                            Bạn có chắc chắn muốn xóa {selectedComments.length}{" "}
+                            bình luận đã chọn? Hành động này không thể hoàn tác.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <DialogFooter>
@@ -729,7 +838,9 @@ export default function CommentsPage() {
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
                 <div>
-                  <Label className="text-sm font-medium text-gray-700 mb-2">Tìm kiếm</Label>
+                  <Label className="text-sm font-medium text-gray-700 mb-2">
+                    Tìm kiếm
+                  </Label>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                     <Input
@@ -741,8 +852,13 @@ export default function CommentsPage() {
                   </div>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-gray-700 mb-2">Công thức</Label>
-                  <Select value={tempSelectedRecipe} onValueChange={setTempSelectedRecipe}>
+                  <Label className="text-sm font-medium text-gray-700 mb-2">
+                    Công thức
+                  </Label>
+                  <Select
+                    value={tempSelectedRecipe}
+                    onValueChange={setTempSelectedRecipe}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Tất cả công thức" />
                     </SelectTrigger>
@@ -757,8 +873,13 @@ export default function CommentsPage() {
                   </Select>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-gray-700 mb-2">Trạng thái</Label>
-                  <Select value={tempSelectedStatus} onValueChange={setTempSelectedStatus}>
+                  <Label className="text-sm font-medium text-gray-700 mb-2">
+                    Trạng thái
+                  </Label>
+                  <Select
+                    value={tempSelectedStatus}
+                    onValueChange={setTempSelectedStatus}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Tất cả trạng thái" />
                     </SelectTrigger>
@@ -771,7 +892,9 @@ export default function CommentsPage() {
                   </Select>
                 </div>
                 <div>
-                  <Label className="text-sm font-medium text-gray-700 mb-2">Ngày đăng</Label>
+                  <Label className="text-sm font-medium text-gray-700 mb-2">
+                    Ngày đăng
+                  </Label>
                   <Input
                     type="date"
                     value={tempSelectedDate}
@@ -779,7 +902,10 @@ export default function CommentsPage() {
                   />
                 </div>
                 <div className="flex items-end space-x-2">
-                  <Button className="flex-1 bg-orange-500 hover:bg-orange-600" onClick={handleApplyFilter}>
+                  <Button
+                    className="flex-1 bg-orange-500 hover:bg-orange-600"
+                    onClick={handleApplyFilter}
+                  >
                     <Filter className="w-4 h-4 mr-2" />
                     Áp dụng bộ lọc
                   </Button>
@@ -800,19 +926,30 @@ export default function CommentsPage() {
                 <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
-                      <span className="text-sm font-medium text-orange-800">Bộ lọc đang áp dụng:</span>
+                      <span className="text-sm font-medium text-orange-800">
+                        Bộ lọc đang áp dụng:
+                      </span>
                       {appliedSearchTerm && (
-                        <Badge variant="secondary" className="bg-orange-100 text-orange-800">
+                        <Badge
+                          variant="secondary"
+                          className="bg-orange-100 text-orange-800"
+                        >
                           Tìm kiếm: "{appliedSearchTerm}"
                         </Badge>
                       )}
                       {appliedSelectedRecipe !== "all" && (
-                        <Badge variant="secondary" className="bg-orange-100 text-orange-800">
+                        <Badge
+                          variant="secondary"
+                          className="bg-orange-100 text-orange-800"
+                        >
                           Công thức: {appliedSelectedRecipe}
                         </Badge>
                       )}
                       {appliedSelectedStatus !== "all" && (
-                        <Badge variant="secondary" className="bg-orange-100 text-orange-800">
+                        <Badge
+                          variant="secondary"
+                          className="bg-orange-100 text-orange-800"
+                        >
                           Trạng thái:{" "}
                           {appliedSelectedStatus === "APPROVED"
                             ? "Đã duyệt"
@@ -822,7 +959,10 @@ export default function CommentsPage() {
                         </Badge>
                       )}
                       {appliedSelectedDate && (
-                        <Badge variant="secondary" className="bg-orange-100 text-orange-800">
+                        <Badge
+                          variant="secondary"
+                          className="bg-orange-100 text-orange-800"
+                        >
                           Ngày: {appliedSelectedDate}
                         </Badge>
                       )}
@@ -843,25 +983,43 @@ export default function CommentsPage() {
                           type="checkbox"
                           className="rounded"
                           checked={
-                            selectedComments.length === filteredComments.length &&
+                            selectedComments.length ===
+                              filteredComments.length &&
                             filteredComments.length > 0
                           }
                           onChange={handleSelectAll}
                         />
                       </th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">STT</th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Người dùng</th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Công thức</th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Nội dung</th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Ngày đăng</th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Trạng thái</th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Thao tác</th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">
+                        STT
+                      </th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">
+                        Người dùng
+                      </th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">
+                        Công thức
+                      </th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">
+                        Nội dung
+                      </th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">
+                        Ngày đăng
+                      </th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">
+                        Trạng thái
+                      </th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">
+                        Thao tác
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredComments.length === 0 && !loading ? (
                       <tr>
-                        <td colSpan={8} className="text-center py-8 text-gray-500">
+                        <td
+                          colSpan={8}
+                          className="text-center py-8 text-gray-500"
+                        >
                           {hasActiveFilters()
                             ? "Không tìm thấy bình luận nào phù hợp với bộ lọc."
                             : "Không có bình luận nào."}
@@ -881,20 +1039,33 @@ export default function CommentsPage() {
                               onChange={() => handleSelectComment(comment.id)}
                             />
                           </td>
-                          <td className="py-3 px-4 text-gray-600">{index + 1}</td>
-                          <td className="py-3 px-4 font-medium">{comment.user}</td>
-                          <td className="py-3 px-4 text-gray-600">{comment.recipe}</td>
+                          <td className="py-3 px-4 text-gray-600">
+                            {index + 1}
+                          </td>
+                          <td className="py-3 px-4 font-medium">
+                            {comment.user}
+                          </td>
+                          <td className="py-3 px-4 text-gray-600">
+                            {comment.recipe}
+                          </td>
                           <td className="py-3 px-4 text-gray-600 max-w-xs">
                             <div className="truncate" title={comment.content}>
                               {comment.content}
                             </div>
                           </td>
-                          <td className="py-3 px-4 text-gray-600">{comment.date}</td>
-                          <td className="py-3 px-4">{getStatusBadge(comment.status)}</td>
+                          <td className="py-3 px-4 text-gray-600">
+                            {comment.date}
+                          </td>
+                          <td className="py-3 px-4">
+                            {getStatusBadge(comment.status)}
+                          </td>
                           <td className="py-3 px-4">
                             <div className="flex space-x-2">
                               <Dialog
-                                open={isEditDialogOpen && editingComment?.id === comment.id}
+                                open={
+                                  isEditDialogOpen &&
+                                  editingComment?.id === comment.id
+                                }
                                 onOpenChange={setIsEditDialogOpen}
                               >
                                 <DialogTrigger asChild>
@@ -909,7 +1080,9 @@ export default function CommentsPage() {
                                 </DialogTrigger>
                                 <DialogContent>
                                   <DialogHeader>
-                                    <DialogTitle>Chỉnh sửa bình luận</DialogTitle>
+                                    <DialogTitle>
+                                      Chỉnh sửa bình luận
+                                    </DialogTitle>
                                     <DialogDescription>
                                       Chỉnh sửa nội dung bình luận của{" "}
                                       {editingComment?.user || "người dùng này"}
@@ -920,7 +1093,9 @@ export default function CommentsPage() {
                                       <Label>Nội dung bình luận</Label>
                                       <Textarea
                                         value={editContent}
-                                        onChange={(e) => setEditContent(e.target.value)}
+                                        onChange={(e) =>
+                                          setEditContent(e.target.value)
+                                        }
                                         placeholder="Nhập nội dung bình luận..."
                                         rows={4}
                                       />
@@ -941,14 +1116,19 @@ export default function CommentsPage() {
                               </Dialog>
 
                               <Dialog
-                                open={isReportDialogOpen && reportingComment?.id === comment.id}
+                                open={
+                                  isReportDialogOpen &&
+                                  reportingComment?.id === comment.id
+                                }
                                 onOpenChange={setIsReportDialogOpen}
                               >
                                 <DialogTrigger asChild>
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    onClick={() => handleOpenReportDialog(comment)}
+                                    onClick={() =>
+                                      handleOpenReportDialog(comment)
+                                    }
                                     className={
                                       comment.reported
                                         ? "text-red-600 border-red-600 bg-red-50 h-9 w-9 p-0"
@@ -964,9 +1144,11 @@ export default function CommentsPage() {
                                   <DialogHeader>
                                     <DialogTitle>Báo cáo bình luận</DialogTitle>
                                     <DialogDescription>
-                                      Báo cáo bình luận của <strong>{reportingComment?.user}</strong>
+                                      Báo cáo bình luận của{" "}
+                                      <strong>{reportingComment?.user}</strong>
                                       <br />
-                                      Vui lòng chọn lý do báo cáo và cung cấp thêm thông tin chi tiết.
+                                      Vui lòng chọn lý do báo cáo và cung cấp
+                                      thêm thông tin chi tiết.
                                     </DialogDescription>
                                   </DialogHeader>
                                   <div className="space-y-4">
@@ -976,12 +1158,20 @@ export default function CommentsPage() {
                                       </Label>
                                       <div className="space-y-2 max-h-48 overflow-y-auto">
                                         {reportReasonsList.map((reason) => (
-                                          <div key={reason} className="flex items-center space-x-2">
+                                          <div
+                                            key={reason}
+                                            className="flex items-center space-x-2"
+                                          >
                                             <Checkbox
                                               id={reason}
-                                              checked={reportReasons.includes(reason)}
+                                              checked={reportReasons.includes(
+                                                reason
+                                              )}
                                               onCheckedChange={(checked) =>
-                                                handleReportReasonChange(reason, checked as boolean)
+                                                handleReportReasonChange(
+                                                  reason,
+                                                  checked as boolean
+                                                )
                                               }
                                             />
                                             <Label
@@ -1005,19 +1195,28 @@ export default function CommentsPage() {
                                         id="report-details"
                                         placeholder="Mô tả chi tiết về vấn đề bạn gặp phải..."
                                         value={reportDetails}
-                                        onChange={(e) => setReportDetails(e.target.value)}
+                                        onChange={(e) =>
+                                          setReportDetails(e.target.value)
+                                        }
                                         rows={3}
                                         className="resize-none"
                                       />
                                     </div>
                                     <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
                                       <p className="text-sm text-yellow-800">
-                                        <strong>Lưu ý:</strong> Báo cáo sai lệch có thể dẫn đến việc tài khoản của bạn bị hạn chế.
+                                        <strong>Lưu ý:</strong> Báo cáo sai lệch
+                                        có thể dẫn đến việc tài khoản của bạn bị
+                                        hạn chế.
                                       </p>
                                     </div>
                                   </div>
                                   <DialogFooter className="flex space-x-2">
-                                    <Button variant="outline" onClick={() => setIsReportDialogOpen(false)}>
+                                    <Button
+                                      variant="outline"
+                                      onClick={() =>
+                                        setIsReportDialogOpen(false)
+                                      }
+                                    >
                                       Hủy
                                     </Button>
                                     <Button
@@ -1062,21 +1261,36 @@ export default function CommentsPage() {
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="start">
                                   <DropdownMenuItem
-                                    onClick={() => handleUpdateCommentStatus(comment.id, "APPROVED")}
+                                    onClick={() =>
+                                      handleUpdateCommentStatus(
+                                        comment.id,
+                                        "APPROVED"
+                                      )
+                                    }
                                     className="text-green-600 hover:bg-green-50"
                                   >
                                     <Check className="w-4 h-4 mr-2" />
                                     Đã duyệt
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
-                                    onClick={() => handleUpdateCommentStatus(comment.id, "PENDING")}
+                                    onClick={() =>
+                                      handleUpdateCommentStatus(
+                                        comment.id,
+                                        "PENDING"
+                                      )
+                                    }
                                     className="text-yellow-600 hover:bg-yellow-50"
                                   >
                                     <MessageSquare className="w-4 h-4 mr-2" />
                                     Chờ duyệt
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
-                                    onClick={() => handleUpdateCommentStatus(comment.id, "HIDDEN")}
+                                    onClick={() =>
+                                      handleUpdateCommentStatus(
+                                        comment.id,
+                                        "HIDDEN"
+                                      )
+                                    }
                                     className="text-gray-600 hover:bg-gray-50"
                                   >
                                     <EyeOff className="w-4 h-4 mr-2" />
@@ -1098,15 +1312,20 @@ export default function CommentsPage() {
                                 </AlertDialogTrigger>
                                 <AlertDialogContent>
                                   <AlertDialogHeader>
-                                    <AlertDialogTitle>Xác nhận xóa</AlertDialogTitle>
+                                    <AlertDialogTitle>
+                                      Xác nhận xóa
+                                    </AlertDialogTitle>
                                     <AlertDialogDescription>
-                                      Bạn có chắc chắn muốn xóa bình luận này? Hành động này không thể hoàn tác.
+                                      Bạn có chắc chắn muốn xóa bình luận này?
+                                      Hành động này không thể hoàn tác.
                                     </AlertDialogDescription>
                                   </AlertDialogHeader>
                                   <DialogFooter>
                                     <AlertDialogCancel>Hủy</AlertDialogCancel>
                                     <AlertDialogAction
-                                      onClick={() => handleDeleteComment(comment.id)}
+                                      onClick={() =>
+                                        handleDeleteComment(comment.id)
+                                      }
                                       className="bg-red-600 hover:bg-red-700"
                                     >
                                       Xóa
@@ -1138,7 +1357,11 @@ export default function CommentsPage() {
                       <Button
                         key={index}
                         size="sm"
-                        className={currentPage === index ? "bg-orange-500 text-white" : "outline"}
+                        className={
+                          currentPage === index
+                            ? "bg-orange-500 text-white"
+                            : "outline"
+                        }
                         onClick={() => setCurrentPage(index)}
                       >
                         {index + 1}

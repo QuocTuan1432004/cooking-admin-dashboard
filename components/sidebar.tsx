@@ -17,9 +17,9 @@ import { LogoutButton } from "@/components/ui/logout-button";
 const menuItems = [
   { icon: BarChart3, label: "Tổng quan", href: "/", badge: null },
   { icon: ChefHat, label: "Công thức", href: "/recipes", badge: null },
-  { icon: Users, label: "Quản lý người dùng", href: "/users", badge: 3 },
+  { icon: Users, label: "Quản lý người dùng", href: "/users", badge: null },
   { icon: FolderOpen, label: "Danh mục", href: "/categories", badge: null },
-  { icon: MessageCircle, label: "Bình luận", href: "/comments", badge: 7 },
+  { icon: MessageCircle, label: "Bình luận", href: "/comments", badge: null },
   { icon: FileText, label: "Quản lý báo cáo", href: "/reports", badge: null },
   { icon: Bell, label: "Thông báo", href: "/notifications", badge: null },
 ];
