@@ -2,7 +2,7 @@
 
 import { useNotification } from "../../../hooks/NotiApi/NotificationContext";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Header } from "@/components/ui/header";
+import { Header } from "@/components/header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";

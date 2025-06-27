@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Header } from "@/components/ui/header";
+import { Header } from "@/components/header";
 import { useRouter } from "next/navigation";
 import type { Recipe } from "@/components/recipe-detail-modal";
 import { RecipeManagementAdvanced } from "@/components/recipe-management-advanced";
@@ -144,8 +144,6 @@ export default function RecipesPage() {
         <Header
           title="Quản lý Công thức"
           showSearch={false}
-          userName="Nguyễn Huỳnh Quốc Tuấn"
-          onLogout={handleLogout}
           notificationCount={unreadCount}
         />
 

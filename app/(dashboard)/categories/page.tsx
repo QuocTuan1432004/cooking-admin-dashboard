@@ -1,7 +1,7 @@
 "use client";
 import { useNotification } from "../../../hooks/NotiApi/NotificationContext"; // Adjusted path to parent directory
 import { useState, useEffect } from "react";
-import { Header } from "@/components/ui/header";
+import { Header } from "@/components/header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -458,8 +458,6 @@ export default function CategoriesPage() {
       <Header
         title="Quản lý Danh mục"
         showSearch={false}
-        userName="Nguyễn Huỳnh Quốc Tuấn"
-        onLogout={handleLogout}
         notificationCount={unreadCount}
       />
       {error && (

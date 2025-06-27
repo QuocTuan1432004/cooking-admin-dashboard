@@ -1,21 +1,38 @@
 "use client";
-import { useNotification } from "../../hooks/NotiApi/NotificationContext"; // Adjusted path to parent directory
+import { useNotification } from "../../hooks/NotiApi/NotificationContext";
 import { useState, useEffect, useCallback } from "react";
 import { Header } from "@/components/header";
 import { StatCard } from "@/components/stat-card";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import {
   TrendingUp,
   Users,
   BookOpen,
   MessageSquare,
   FolderOpen,
+  AlertTriangle,
+  CheckCircle,
+  Clock,
+  EyeOff,
+  RefreshCw,
 } from "lucide-react";
-import type { Recipe } from "@/components/recipe-detail-modal";
-import { RecipeManagement } from "@/components/recipe-management";
+import { useRouter } from "next/navigation";
 import { useAccountsApi } from "@/hooks/accountApi";
 import { notificationApi, NotificationResponse } from "@/hooks/NotiApi/NotiApi";
-import { useRouter } from "next/navigation";
+import {
+  countAllApprovedRecipes,
+  countAllNotApprovedRecipes,
+  countAllPendingRecipes,
+  countAllRecipes,
+} from "@/hooks/RecipeApi/recipeApi";
+import { getAllMainCategories } from "@/hooks/categoryApi/categoryApi";
+import {
+  getAllComments,
+  getTotalCommentReports,
+  getReportStatistics,
+  type CommentResponse,
+} from "@/hooks/commentApi/commentApi";
 
 // Helper function to map notification types
 function mapNotificationType(notificationType: string): string {
@@ -27,62 +44,72 @@ function mapNotificationType(notificationType: string): string {
     COMMENT_ADDED: "comment",
     SYSTEM_ALERT: "warning",
   };
-
   return typeMap[notificationType] || "info";
+}
+
+interface DashboardStats {
+  totalRecipes: number;
+  approvedRecipes: number;
+  pendingRecipes: number;
+  rejectedRecipes: number;
+  totalUsers: number;
+  activeUsers: number;
+  bannedUsers: number;
+  totalCategories: number;
+  mainCategories: number;
+  subCategories: number;
+  totalComments: number;
+  approvedComments: number;
+  pendingComments: number;
+  hiddenComments: number;
+  reportedComments: number;
+  totalReports: number;
 }
 
 export default function DashboardPage() {
   const { unreadCount } = useNotification();
   const router = useRouter();
   const { getAllAccounts } = useAccountsApi();
-  const [unreadNotifications, setUnreadNotifications] = useState(0);
-  const [totalUsers, setTotalUsers] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [notifications, setNotifications] = useState<
-    {
-      id: string;
-      title: string;
-      message: string;
-      date: string;
-      time: string;
-      type: string | void;
-      read: boolean;
-      dismissed: boolean;
-      originalType: string;
-    }[]
-  >([]);
-  const [dismissedNotifications, setDismissedNotifications] = useState<
-    {
-      id: string;
-      title: string;
-      message: string;
-      date: string;
-      time: string;
-      type: string | void;
-      read: boolean;
-      dismissed: boolean;
-      originalType: string;
-    }[]
-  >([]);
 
-  // Fetch total users count
-  useEffect(() => {
-    fetchDashboardData()
-  }, [])
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [stats, setStats] = useState<DashboardStats>({
+    totalRecipes: 0,
+    approvedRecipes: 0,
+    pendingRecipes: 0,
+    rejectedRecipes: 0,
+    totalUsers: 0,
+    activeUsers: 0,
+    bannedUsers: 0,
+    totalCategories: 0,
+    mainCategories: 0,
+    subCategories: 0,
+    totalComments: 0,
+    approvedComments: 0,
+    pendingComments: 0,
+    hiddenComments: 0,
+    reportedComments: 0,
+    totalReports: 0,
+  });
+
+  // Notification logic
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [dismissedNotifications, setDismissedNotifications] = useState<any[]>([]);
 
   const calculateCommentStats = (comments: CommentResponse[]) => {
-    const approved = comments.filter((c) => c.status === "APPROVED").length
-    const pending = comments.filter((c) => c.status === "PENDING").length
-    const hidden = comments.filter((c) => c.status === "HIDDEN").length
-    const reported = comments.filter((c) => c.reported === true).length
-
-    return { approved, pending, hidden, reported }
-  }
+    const approved = comments.filter((c) => c.status === "APPROVED").length;
+    const pending = comments.filter((c) => c.status === "PENDING").length;
+    const hidden = comments.filter((c) => c.status === "HIDDEN").length;
+    const reported = comments.filter((c) => c.reported === true).length;
+    return { approved, pending, hidden, reported };
+  };
 
   const fetchDashboardData = async () => {
     try {
-      setLoading(true)
-      setError(null)
+      setLoading(true);
+      setError(null);
 
       // Fetch all data in parallel
       const [
@@ -100,12 +127,12 @@ export default function DashboardPage() {
         countAllApprovedRecipes(),
         countAllPendingRecipes(),
         countAllNotApprovedRecipes(),
-        getAllAccounts(0, 1), // Get first page to get totalElements
+        getAllAccounts(0, 1),
         getAllMainCategories(),
-        getAllComments(0, 1), // Get first page for total count
+        getAllComments(0, 1),
         getTotalCommentReports(),
         getReportStatistics(),
-      ])
+      ]);
 
       // Process results
       const newStats: DashboardStats = {
@@ -114,8 +141,8 @@ export default function DashboardPage() {
         pendingRecipes: pendingRecipesData.status === "fulfilled" ? pendingRecipesData.value : 0,
         rejectedRecipes: rejectedRecipesData.status === "fulfilled" ? rejectedRecipesData.value : 0,
         totalUsers: usersData.status === "fulfilled" ? usersData.value.totalElements : 0,
-        activeUsers: 0, // Will be calculated from user data
-        bannedUsers: 0, // Will be calculated from user data
+        activeUsers: 0,
+        bannedUsers: 0,
         totalCategories: 0,
         mainCategories: categoriesData.status === "fulfilled" ? categoriesData.value.length : 0,
         subCategories: 0,
@@ -125,64 +152,66 @@ export default function DashboardPage() {
         hiddenComments: 0,
         reportedComments: 0,
         totalReports: totalReportsData.status === "fulfilled" ? totalReportsData.value : 0,
-      }
+      };
 
       // Calculate categories
       if (categoriesData.status === "fulfilled") {
-        const categories = categoriesData.value
-        let totalSubCategories = 0
-        categories.forEach((category) => {
+        const categories = categoriesData.value;
+        let totalSubCategories = 0;
+        categories.forEach((category: any) => {
           if (category.children) {
-            totalSubCategories += category.children.length
+            totalSubCategories += category.children.length;
           }
-        })
-        newStats.totalCategories = categories.length + totalSubCategories
-        newStats.subCategories = totalSubCategories
+        });
+        newStats.totalCategories = categories.length + totalSubCategories;
+        newStats.subCategories = totalSubCategories;
       }
 
       // Calculate user stats
       if (usersData.status === "fulfilled") {
         try {
-          const allUsersData = await getAllAccounts(0, usersData.value.totalElements)
-          const activeUsers = allUsersData.content.filter((user) => user.status === "ACTIVE").length
-          const bannedUsers = allUsersData.content.filter((user) => user.status === "BANNED").length
-          newStats.activeUsers = activeUsers
-          newStats.bannedUsers = bannedUsers
+          const allUsersData = await getAllAccounts(0, usersData.value.totalElements);
+          const activeUsers = allUsersData.content.filter((user: any) => user.status === "ACTIVE").length;
+          const bannedUsers = allUsersData.content.filter((user: any) => user.status === "BANNED").length;
+          newStats.activeUsers = activeUsers;
+          newStats.bannedUsers = bannedUsers;
         } catch (error) {
-          console.warn("Could not fetch detailed user stats:", error)
+          console.warn("Could not fetch detailed user stats:", error);
         }
       }
 
       // Calculate comment stats using the actual API
       if (commentsData.status === "fulfilled") {
         try {
-          // Fetch more comments to get accurate stats
-          const allCommentsData = await getAllComments(0, Math.min(commentsData.value.totalElements, 1000))
-          const commentStats = calculateCommentStats(allCommentsData.content)
+          const allCommentsData = await getAllComments(0, Math.min(commentsData.value.totalElements, 1000));
+          const commentStats = calculateCommentStats(allCommentsData.content);
 
-          newStats.approvedComments = commentStats.approved
-          newStats.pendingComments = commentStats.pending
-          newStats.hiddenComments = commentStats.hidden
-          newStats.reportedComments = commentStats.reported
+          newStats.approvedComments = commentStats.approved;
+          newStats.pendingComments = commentStats.pending;
+          newStats.hiddenComments = commentStats.hidden;
+          newStats.reportedComments = commentStats.reported;
         } catch (error) {
-          console.warn("Could not fetch detailed comment stats:", error)
+          console.warn("Could not fetch detailed comment stats:", error);
         }
       }
 
-      setStats(newStats)
-      setLastUpdated(new Date())
+      setStats(newStats);
+      setLastUpdated(new Date());
     } catch (error) {
-      console.error("Failed to fetch dashboard data:", error)
-      setError("Không thể tải dữ liệu dashboard. Vui lòng thử lại.")
+      console.error("Failed to fetch dashboard data:", error);
+      setError("Không thể tải dữ liệu dashboard. Vui lòng thử lại.");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   };
 
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  // Notification WebSocket logic
   const handleNewNotification = useCallback(
     (notification: NotificationResponse) => {
-      console.log("🔔 Nhận thông báo mới qua WebSocket:", notification);
-
       const newNotification = {
         id: notification.id,
         title: notification.title,
@@ -195,129 +224,63 @@ export default function DashboardPage() {
         originalType: notification.notificationType,
       };
 
-      // Kiểm tra trùng lặp và cập nhật state thông báo
       if (notification.dismissed) {
         setDismissedNotifications((prev) => {
-          // Kiểm tra xem thông báo này đã tồn tại chưa
           const exists = prev.some((n) => n.id === newNotification.id);
-          if (exists) {
-            console.log(
-              `⚠️ Bỏ qua thông báo đã ẩn trùng lặp: ${newNotification.id}`
-            );
-            return prev;
-          }
-
-          console.log("✅ Thêm thông báo đã ẩn mới vào state");
+          if (exists) return prev;
           return [newNotification, ...prev];
         });
       } else {
         setNotifications((prev) => {
-          // Kiểm tra xem thông báo này đã tồn tại chưa
           const exists = prev.some((n) => n.id === newNotification.id);
-          if (exists) {
-            console.log(`⚠️ Bỏ qua thông báo trùng lặp: ${newNotification.id}`);
-            return prev;
-          }
-
-          console.log("✅ Thêm thông báo mới vào state");
-          // Thêm thông báo mới vào đầu danh sách
+          if (exists) return prev;
           return [newNotification, ...prev];
         });
 
-        // Cập nhật số lượng thông báo chưa đọc nếu thông báo mới chưa đọc
         if (!notification.readStatus) {
-          setUnreadNotifications((prev) => {
-            console.log(
-              `📊 Cập nhật số thông báo chưa đọc: ${prev} → ${prev + 1}`
-            );
-            return prev + 1;
-          });
+          setUnreadNotifications((prev) => prev + 1);
         }
       }
     },
     []
-  ); // Empty dependency array since we don't depend on any props/state
+  );
 
-  // Single useEffect for notification handling
   useEffect(() => {
-    let isSubscribed = true; // Flag to prevent state updates if component unmounted
-
+    let isSubscribed = true;
     const initializeNotifications = async () => {
       try {
-        // Fetch initial unread notifications count
-        const notifications = await notificationApi.getNotifications();
-
+        const response = await notificationApi.getNotifications();
         if (isSubscribed) {
-          const response = await notificationApi.getNotifications();
-          const count = response.content.filter((n) => !n.readStatus).length;
+          const count = response.content.filter((n: any) => !n.readStatus).length;
           setUnreadNotifications(count);
-          console.log(`📊 Initial unread notifications: ${count}`);
         }
-
-        // Connect to WebSocket and register callback
         await notificationApi.connect();
-
         if (isSubscribed) {
-          // Clear any existing callbacks first
           notificationApi.unregisterCallback(handleNewNotification);
           notificationApi.registerCallback(handleNewNotification);
-          console.log("✅ WebSocket connected and callback registered");
         }
       } catch (error) {
         console.error("Failed to initialize notifications:", error);
       }
     };
-
     initializeNotifications();
-
-    // Cleanup function
     return () => {
       isSubscribed = false;
       notificationApi.unregisterCallback(handleNewNotification);
-      console.log("🧹 Cleanup: Unregistered notification callback");
     };
-  }, []); // Empty dependency array to run only once
+  }, [handleNewNotification]);
 
   const handleLogout = () => {
-    document.cookie =
-      "auth_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+    document.cookie = "auth_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
     router.push("/login");
   };
 
-  const [pendingRecipes, setPendingRecipes] = useState<Recipe[]>([
-    // {
-    // //   // id: 1,
-    // //   name: "Rau muống xào tỏi",
-    // //   category: "Món xào",
-    // //   author: "Lê Văn Cường",
-    // //   date: "14/05/2025",
-    // //   image: "/placeholder.svg?height=50&width=50",
-    // //   isNew: true,
-    // //   status: "pending",
-    // // },
-    // {
-    //   id: 2,
-    //   name: "Bún bò Huế",
-    //   category: "Món nước",
-    //   author: "Hoàng Văn Em",
-    //   date: "15/05/2025",
-    //   image: "/placeholder.svg?height=50&width=50",
-    //   isNew: false,
-    //   status: "pending",
-    // },
-    // {
-    //   id: 3,
-    //   name: "Cá kho tộ",
-    //   category: "Món kho",
-    //   author: "Nguyễn Thị Phương",
-    //   date: "15/05/2025",
-    //   image: "/placeholder.svg?height=50&width=50",
-    //   isNew: true,
-    //   status: "pending",
-    // },
-  ]);
+  const navigateTo = (path: string) => {
+    router.push(path);
+  };
 
-  const stats = [
+  // Dashboard stats for StatCard
+  const dashboardStats = [
     {
       title: "Tổng số công thức",
       number: stats.totalRecipes,
@@ -406,15 +369,45 @@ export default function DashboardPage() {
         },
       ],
     },
-  ]
+  ];
 
   return (
-    <div>
+    <div className="min-h-screen bg-gray-50">
       <Header
         title="Tổng quan"
-        userName="Nguyễn Huỳnh Quốc Tuấn"
-        notificationCount={unreadCount}
+        userName="Let Me Cook admin"
+        notificationCount={unreadNotifications}
       />
+
+      <div className="p-6">
+        {/* Header with refresh button */}
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+            <p className="text-sm text-gray-600">
+              Cập nhật lần cuối: {lastUpdated.toLocaleTimeString("vi-VN")}
+            </p>
+          </div>
+          <Button
+            onClick={fetchDashboardData}
+            disabled={loading}
+            variant="outline"
+            className="flex items-center space-x-2"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+            <span>Làm mới</span>
+          </Button>
+        </div>
+
+        {/* Error message */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="flex items-center space-x-2">
+              <AlertTriangle className="w-5 h-5 text-red-500" />
+              <p className="text-red-700">{error}</p>
+            </div>
+          </div>
+        )}
 
         {/* Quick Actions */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
@@ -656,5 +649,5 @@ export default function DashboardPage() {
         </div>
       </div>
     </div>
-  )
+  );
 }
