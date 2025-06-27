@@ -2,6 +2,17 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { jwtDecode } from 'jwt-decode';
+
+// 👉 Định nghĩa sớm hàm getTokenFromCookie
+const getTokenFromCookie = (name: string): string | null => {
+  if (typeof document === 'undefined') return null;
+
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) return parts.pop()?.split(';').shift() || null;
+  return null;
+};
 
 interface RefreshRequest {
   token: string;
@@ -19,11 +30,37 @@ interface ApiResponse<T> {
   message?: string;
 }
 
+interface DecodedToken {
+  sub: string;
+  email: string;
+  roles?: string[];
+  id: string;
+  exp: number;
+}
+
 export const useAuth = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
 
+  const getDecodedToken = (): DecodedToken | null => {
+    const token = getTokenFromCookie('auth_token');
+    if (!token) return null;
+    try {
+      return jwtDecode<DecodedToken>(token);
+    } catch (err) {
+      console.error("❌ Failed to decode token", err);
+      return null;
+    }
+  };
+
+  const decoded = getDecodedToken();
+  // console.log("🔍 Decoded token:", decoded);
+  const userId = decoded?.id || null;      // ✅ UUID từ claim 'id'
+  const email = decoded?.sub || null;      // ✅ email từ 'sub'
+  const roles = decoded?.roles || [];      // ✅ quyền từ token
+  
+  
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     setError("");
@@ -41,7 +78,6 @@ export const useAuth = () => {
 
       if (response.ok && apiResponse.result.authenticated) {
         saveTokens(apiResponse.result.token, apiResponse.result.refreshToken);
-        // ← BỎ setupAutoRefresh() - không cần timer
         router.push("/");
         return true;
       } else {
@@ -65,7 +101,6 @@ export const useAuth = () => {
     }
 
     try {
-      console.log('🔄 Attempting to refresh token...');
       const response = await fetch('http://localhost:8080/auth/refresh', {
         method: 'POST',
         headers: {
@@ -77,12 +112,9 @@ export const useAuth = () => {
       const apiResponse: ApiResponse<AuthResponse> = await response.json();
 
       if (response.ok && apiResponse.result.authenticated) {
-        console.log('✅ Token refreshed successfully');
         saveTokens(apiResponse.result.token, apiResponse.result.refreshToken);
-        // ← BỎ setupAutoRefresh() - không cần timer
         return true;
       } else {
-        console.log('❌ Refresh failed:', apiResponse.message);
         logout();
         return false;
       }
@@ -93,33 +125,27 @@ export const useAuth = () => {
     }
   };
 
-  // ← BỎ setupAutoRefresh - không cần timer nữa
-
   const saveTokens = (token: string, refreshToken: string) => {
-    document.cookie = `auth_token=${token}; path=/; max-age=86400; secure; samesite=strict`;
-    document.cookie = `refresh_token=${refreshToken}; path=/; max-age=86400; secure; samesite=strict`;
-    
-    console.log('💾 Tokens saved:', { 
-      accessToken: token.substring(0, 20) + '...', 
-      refreshToken: refreshToken.substring(0, 20) + '...' 
-    });
+    const isLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+  
+    const cookieOptions = isLocalhost
+      ? "path=/; max-age=86400; samesite=lax"
+      : "path=/; max-age=86400; secure; samesite=strict";
+  
+    document.cookie = `auth_token=${token}; ${cookieOptions}`;
+    document.cookie = `refresh_token=${refreshToken}; ${cookieOptions}`;
+  
+    console.log('💾 Tokens saved');
+    console.log("🔐 auth_token:", token);
+    console.log("🔐 refresh_token:", refreshToken);
   };
-
-  const getTokenFromCookie = (name: string): string | null => {
-    if (typeof document === 'undefined') return null;
-    
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) return parts.pop()?.split(';').shift() || null;
-    return null;
-  };
+  
 
   const logout = async () => {
     const accessToken = getTokenFromCookie('auth_token');
-    
+
     if (accessToken) {
       try {
-        console.log('🔄 Calling logout API...');
         await fetch('http://localhost:8080/auth/logout', {
           method: 'POST',
           headers: {
@@ -127,55 +153,37 @@ export const useAuth = () => {
           },
           body: JSON.stringify({ token: accessToken }),
         });
-        console.log('✅ Logout API called successfully');
       } catch (error) {
         console.error('❌ Logout API error:', error);
       }
     }
 
-    // Clear cookies
     document.cookie = 'auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
     document.cookie = 'refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-    
-    console.log('👋 Logged out');
-    router.push('/login');
-  };
 
-  const manualRefresh = async () => {
-    console.log('🔄 Manual refresh triggered');
-    return await refreshToken();
+    router.push('/login');
   };
 
   return {
     login,
-    refreshToken: manualRefresh,
-    logout,
-    isLoading,
-    error,
-    setError
+  refreshToken,
+  logout,
+  isLoading,
+  error,
+  setError,
+  userId,   // UUID
+  email,    // email từ sub
+  roles,
   };
 };
 
-// ← THÊM: authenticatedFetch - auto refresh khi API call bị 401
+// ✅ Auto refresh cho fetch API khi gặp 401
 export const authenticatedFetch = async (url: string, options: RequestInit = {}) => {
-  const getTokenFromCookie = (name: string): string | null => {
-    if (typeof document === 'undefined') return null;
-    
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) return parts.pop()?.split(';').shift() || null;
-    return null;
-  };
-
   const refreshTokens = async (): Promise<boolean> => {
     const refreshTokenValue = getTokenFromCookie('refresh_token');
-    if (!refreshTokenValue) {
-      console.log('❌ No refresh token found for auto-refresh');
-      return false;
-    }
+    if (!refreshTokenValue) return false;
 
     try {
-      console.log('🔄 Access token expired, auto-refreshing...');
       const response = await fetch('http://localhost:8080/auth/refresh', {
         method: 'POST',
         headers: {
@@ -187,15 +195,10 @@ export const authenticatedFetch = async (url: string, options: RequestInit = {})
       const apiResponse: ApiResponse<AuthResponse> = await response.json();
 
       if (response.ok && apiResponse.result.authenticated) {
-        // Save new tokens
         document.cookie = `auth_token=${apiResponse.result.token}; path=/; max-age=86400; secure; samesite=strict`;
         document.cookie = `refresh_token=${apiResponse.result.refreshToken}; path=/; max-age=86400; secure; samesite=strict`;
-        
-        console.log('✅ Tokens auto-refreshed successfully');
         return true;
       } else {
-        console.log('❌ Auto-refresh failed:', apiResponse.message);
-        // Redirect to login
         window.location.href = '/login';
         return false;
       }
@@ -206,62 +209,47 @@ export const authenticatedFetch = async (url: string, options: RequestInit = {})
     }
   };
 
-  // Get current access token
   let accessToken = getTokenFromCookie('auth_token');
-  
-  // Add auth header if token exists
-  const authHeaders = accessToken ? {
-    'Authorization': `Bearer ${accessToken}`,
-    ...options.headers
-  } : options.headers;
 
-  // First API call
+  const authHeaders = accessToken
+    ? { Authorization: `Bearer ${accessToken}`, ...options.headers }
+    : options.headers;
 
-const headers = options.body instanceof FormData ? 
-    { ...authHeaders } : 
-    { 'Content-Type': 'application/json', ...authHeaders };
+  const headers = options.body instanceof FormData
+    ? { ...authHeaders }
+    : { 'Content-Type': 'application/json', ...authHeaders };
 
-  let response = await fetch(url, {
-    ...options,
-    headers
-  });
+  let response = await fetch(url, { ...options, headers });
 
-  // If 401 (Unauthorized), try to refresh token and retry
   if (response.status === 401) {
-    console.log('🔓 401 Unauthorized - attempting token refresh...');
-    
     const refreshSuccess = await refreshTokens();
-    
+
     if (refreshSuccess) {
-      // Get new access token and retry
       accessToken = getTokenFromCookie('auth_token');
-      
       response = await fetch(url, {
         ...options,
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-          ...options.headers
-        }
+          Authorization: `Bearer ${accessToken}`,
+          ...options.headers,
+        },
       });
-      
-      console.log('🔄 API call retried with new access token');
     }
   }
 
   return response;
 };
 
-// ← THÊM: useApi hook để sử dụng authenticatedFetch dễ dàng
+// ✅ Hook tiện lợi để dùng fetch
 export const useApi = () => {
   const apiCall = async (url: string, options: RequestInit = {}) => {
     try {
       const response = await authenticatedFetch(url, options);
-      
+
       if (!response.ok) {
         throw new Error(`API Error: ${response.status} ${response.statusText}`);
       }
-      
+
       return await response.json();
     } catch (error) {
       console.error('API call failed:', error);
@@ -270,17 +258,17 @@ export const useApi = () => {
   };
 
   const get = (url: string) => apiCall(url, { method: 'GET' });
-  
+
   const post = (url: string, data: any) => apiCall(url, {
     method: 'POST',
-    body: JSON.stringify(data)
+    body: JSON.stringify(data),
   });
-  
+
   const put = (url: string, data: any) => apiCall(url, {
     method: 'PUT',
-    body: JSON.stringify(data)
+    body: JSON.stringify(data),
   });
-  
+
   const del = (url: string) => apiCall(url, { method: 'DELETE' });
 
   return { get, post, put, delete: del };

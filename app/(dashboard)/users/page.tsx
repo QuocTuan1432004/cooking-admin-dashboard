@@ -1,9 +1,10 @@
 "use client";
-
+import { useNotification } from "../../../hooks/NotiApi/NotificationContext"; // Adjusted path to parent directory
 import { Header } from "@/components/header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { BanUserDialog } from "@/components/ui/ban-user-dialog";
+
 import {
   Select,
   SelectContent,
@@ -28,6 +29,7 @@ interface User {
 }
 
 export default function UsersPage() {
+  const { unreadCount } = useNotification();
   const {
     getAllAccounts,
     deleteAccount,
@@ -346,7 +348,11 @@ export default function UsersPage() {
 
   return (
     <div>
-      <Header title="Quản lý Người dùng" showSearch={false} />
+      <Header
+        title="Quản lý Người dùng"
+        showSearch={false}
+        notificationCount={unreadCount}
+      />
 
       <div className="bg-white rounded-lg shadow-md p-6">
         <div className="flex justify-between items-center mb-6">

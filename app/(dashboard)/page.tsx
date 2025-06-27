@@ -1,147 +1,71 @@
-"use client"
-
-import type React from "react"
-
-import { useState, useEffect } from "react"
-import { Header } from "@/components/header"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+"use client";
+import { useNotification } from "../../hooks/NotiApi/NotificationContext"; // Adjusted path to parent directory
+import { useState, useEffect, useCallback } from "react";
+import { Header } from "@/components/header";
+import { StatCard } from "@/components/stat-card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   TrendingUp,
   Users,
   BookOpen,
   MessageSquare,
   FolderOpen,
-  AlertTriangle,
-  CheckCircle,
-  Clock,
-  EyeOff,
-  Loader2,
-  RefreshCw,
-} from "lucide-react"
-import { useRouter } from "next/navigation"
-import { useAuth } from "@/hooks/userAuth"
-import { useAccountsApi } from "@/hooks/accountApi"
-import {
-  countAllRecipes,
-  countAllApprovedRecipes,
-  countAllPendingRecipes,
-  countAllNotApprovedRecipes,
-} from "@/hooks/RecipeApi/recipeApi"
-import { getAllMainCategories } from "@/hooks/categoryApi/categoryApi"
-import {
-  getAllComments,
-  getTotalCommentReports,
-  getReportStatistics,
-  type CommentResponse,
-} from "@/hooks/commentApi/commentApi"
+} from "lucide-react";
+import type { Recipe } from "@/components/recipe-detail-modal";
+import { RecipeManagement } from "@/components/recipe-management";
+import { useAccountsApi } from "@/hooks/accountApi";
+import { notificationApi, NotificationResponse } from "@/hooks/NotiApi/NotiApi";
+import { useRouter } from "next/navigation";
 
-// Types
-interface DashboardStats {
-  totalRecipes: number
-  approvedRecipes: number
-  pendingRecipes: number
-  rejectedRecipes: number
-  totalUsers: number
-  activeUsers: number
-  bannedUsers: number
-  totalCategories: number
-  mainCategories: number
-  subCategories: number
-  totalComments: number
-  approvedComments: number
-  pendingComments: number
-  hiddenComments: number
-  reportedComments: number
-  totalReports: number
+// Helper function to map notification types
+function mapNotificationType(notificationType: string): string {
+  const typeMap: { [key: string]: string } = {
+    RECIPE_SUBMITTED: "recipe",
+    RECIPE_APPROVED: "success",
+    RECIPE_REJECTED: "error",
+    USER_REGISTERED: "user",
+    COMMENT_ADDED: "comment",
+    SYSTEM_ALERT: "warning",
+  };
+
+  return typeMap[notificationType] || "info";
 }
 
-interface StatCardProps {
-  title: string
-  number: number
-  details: Array<{
-    label: string
-    value: number
-    color?: string
-    icon?: React.ReactNode
-  }>
-  colorIndex: number
-  loading?: boolean
-}
+export default function DashboardPage() {
+  const { unreadCount } = useNotification();
+  const router = useRouter();
+  const { getAllAccounts } = useAccountsApi();
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [notifications, setNotifications] = useState<
+    {
+      id: string;
+      title: string;
+      message: string;
+      date: string;
+      time: string;
+      type: string | void;
+      read: boolean;
+      dismissed: boolean;
+      originalType: string;
+    }[]
+  >([]);
+  const [dismissedNotifications, setDismissedNotifications] = useState<
+    {
+      id: string;
+      title: string;
+      message: string;
+      date: string;
+      time: string;
+      type: string | void;
+      read: boolean;
+      dismissed: boolean;
+      originalType: string;
+    }[]
+  >([]);
 
-const StatCard = ({ title, number, details, colorIndex, loading }: StatCardProps) => {
-  const colors = [
-    "from-blue-500 to-blue-600",
-    "from-green-500 to-green-600",
-    "from-purple-500 to-purple-600",
-    "from-orange-500 to-orange-600",
-  ]
-
-  const bgColors = [
-    "bg-blue-50 border-blue-200",
-    "bg-green-50 border-green-200",
-    "bg-purple-50 border-purple-200",
-    "bg-orange-50 border-orange-200",
-  ]
-
-  return (
-    <Card
-      className={`relative overflow-hidden hover:shadow-lg transition-all duration-300 ${bgColors[colorIndex % bgColors.length]}`}
-    >
-      <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${colors[colorIndex % colors.length]}`}></div>
-      <CardContent className="p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-medium text-gray-600 uppercase tracking-wide">{title}</h3>
-          {loading && <Loader2 className="w-4 h-4 animate-spin text-gray-400" />}
-        </div>
-        <div className="text-3xl font-bold text-gray-900 mb-4">{loading ? "..." : number.toLocaleString()}</div>
-        <div className="space-y-2">
-          {details.map((detail, index) => (
-            <div key={index} className="flex items-center justify-between text-sm">
-              <div className="flex items-center space-x-2">
-                {detail.icon}
-                <span className="text-gray-600">{detail.label}</span>
-              </div>
-              <span className={`font-medium ${detail.color || "text-gray-900"}`}>
-                {loading ? "..." : detail.value.toLocaleString()}
-              </span>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
-export default function Dashboard() {
-  const router = useRouter()
-  const { logout } = useAuth()
-  const { getAllAccounts } = useAccountsApi()
-
-  const [unreadNotifications] = useState(3)
-  const [stats, setStats] = useState<DashboardStats>({
-    totalRecipes: 0,
-    approvedRecipes: 0,
-    pendingRecipes: 0,
-    rejectedRecipes: 0,
-    totalUsers: 0,
-    activeUsers: 0,
-    bannedUsers: 0,
-    totalCategories: 0,
-    mainCategories: 0,
-    subCategories: 0,
-    totalComments: 0,
-    approvedComments: 0,
-    pendingComments: 0,
-    hiddenComments: 0,
-    reportedComments: 0,
-    totalReports: 0,
-  })
-
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [lastUpdated, setLastUpdated] = useState<Date>(new Date())
-
+  // Fetch total users count
   useEffect(() => {
     fetchDashboardData()
   }, [])
@@ -253,17 +177,147 @@ export default function Dashboard() {
     } finally {
       setLoading(false)
     }
-  }
+  };
 
-  const handleLogout = async () => {
-    await logout()
-  }
+  const handleNewNotification = useCallback(
+    (notification: NotificationResponse) => {
+      console.log("🔔 Nhận thông báo mới qua WebSocket:", notification);
 
-  const navigateTo = (path: string) => {
-    router.push(path)
-  }
+      const newNotification = {
+        id: notification.id,
+        title: notification.title,
+        message: notification.message,
+        date: notification.date,
+        time: notification.time,
+        type: mapNotificationType(notification.notificationType),
+        read: notification.readStatus,
+        dismissed: notification.dismissed,
+        originalType: notification.notificationType,
+      };
 
-  const dashboardStats = [
+      // Kiểm tra trùng lặp và cập nhật state thông báo
+      if (notification.dismissed) {
+        setDismissedNotifications((prev) => {
+          // Kiểm tra xem thông báo này đã tồn tại chưa
+          const exists = prev.some((n) => n.id === newNotification.id);
+          if (exists) {
+            console.log(
+              `⚠️ Bỏ qua thông báo đã ẩn trùng lặp: ${newNotification.id}`
+            );
+            return prev;
+          }
+
+          console.log("✅ Thêm thông báo đã ẩn mới vào state");
+          return [newNotification, ...prev];
+        });
+      } else {
+        setNotifications((prev) => {
+          // Kiểm tra xem thông báo này đã tồn tại chưa
+          const exists = prev.some((n) => n.id === newNotification.id);
+          if (exists) {
+            console.log(`⚠️ Bỏ qua thông báo trùng lặp: ${newNotification.id}`);
+            return prev;
+          }
+
+          console.log("✅ Thêm thông báo mới vào state");
+          // Thêm thông báo mới vào đầu danh sách
+          return [newNotification, ...prev];
+        });
+
+        // Cập nhật số lượng thông báo chưa đọc nếu thông báo mới chưa đọc
+        if (!notification.readStatus) {
+          setUnreadNotifications((prev) => {
+            console.log(
+              `📊 Cập nhật số thông báo chưa đọc: ${prev} → ${prev + 1}`
+            );
+            return prev + 1;
+          });
+        }
+      }
+    },
+    []
+  ); // Empty dependency array since we don't depend on any props/state
+
+  // Single useEffect for notification handling
+  useEffect(() => {
+    let isSubscribed = true; // Flag to prevent state updates if component unmounted
+
+    const initializeNotifications = async () => {
+      try {
+        // Fetch initial unread notifications count
+        const notifications = await notificationApi.getNotifications();
+
+        if (isSubscribed) {
+          const response = await notificationApi.getNotifications();
+          const count = response.content.filter((n) => !n.readStatus).length;
+          setUnreadNotifications(count);
+          console.log(`📊 Initial unread notifications: ${count}`);
+        }
+
+        // Connect to WebSocket and register callback
+        await notificationApi.connect();
+
+        if (isSubscribed) {
+          // Clear any existing callbacks first
+          notificationApi.unregisterCallback(handleNewNotification);
+          notificationApi.registerCallback(handleNewNotification);
+          console.log("✅ WebSocket connected and callback registered");
+        }
+      } catch (error) {
+        console.error("Failed to initialize notifications:", error);
+      }
+    };
+
+    initializeNotifications();
+
+    // Cleanup function
+    return () => {
+      isSubscribed = false;
+      notificationApi.unregisterCallback(handleNewNotification);
+      console.log("🧹 Cleanup: Unregistered notification callback");
+    };
+  }, []); // Empty dependency array to run only once
+
+  const handleLogout = () => {
+    document.cookie =
+      "auth_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+    router.push("/login");
+  };
+
+  const [pendingRecipes, setPendingRecipes] = useState<Recipe[]>([
+    // {
+    // //   // id: 1,
+    // //   name: "Rau muống xào tỏi",
+    // //   category: "Món xào",
+    // //   author: "Lê Văn Cường",
+    // //   date: "14/05/2025",
+    // //   image: "/placeholder.svg?height=50&width=50",
+    // //   isNew: true,
+    // //   status: "pending",
+    // // },
+    // {
+    //   id: 2,
+    //   name: "Bún bò Huế",
+    //   category: "Món nước",
+    //   author: "Hoàng Văn Em",
+    //   date: "15/05/2025",
+    //   image: "/placeholder.svg?height=50&width=50",
+    //   isNew: false,
+    //   status: "pending",
+    // },
+    // {
+    //   id: 3,
+    //   name: "Cá kho tộ",
+    //   category: "Món kho",
+    //   author: "Nguyễn Thị Phương",
+    //   date: "15/05/2025",
+    //   image: "/placeholder.svg?height=50&width=50",
+    //   isNew: true,
+    //   status: "pending",
+    // },
+  ]);
+
+  const stats = [
     {
       title: "Tổng số công thức",
       number: stats.totalRecipes,
@@ -355,36 +409,12 @@ export default function Dashboard() {
   ]
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header title="Quản lý Người dùng" showSearch={false} notificationCount={unreadNotifications} />
-
-      <div className="p-6">
-        {/* Header with refresh button */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-            <p className="text-sm text-gray-600">Cập nhật lần cuối: {lastUpdated.toLocaleTimeString("vi-VN")}</p>
-          </div>
-          <Button
-            onClick={fetchDashboardData}
-            disabled={loading}
-            variant="outline"
-            className="flex items-center space-x-2"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-            <span>Làm mới</span>
-          </Button>
-        </div>
-
-        {/* Error message */}
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-            <div className="flex items-center space-x-2">
-              <AlertTriangle className="w-5 h-5 text-red-500" />
-              <p className="text-red-700">{error}</p>
-            </div>
-          </div>
-        )}
+    <div>
+      <Header
+        title="Tổng quan"
+        userName="Nguyễn Huỳnh Quốc Tuấn"
+        notificationCount={unreadCount}
+      />
 
         {/* Quick Actions */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">

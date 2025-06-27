@@ -1,4 +1,5 @@
 "use client";
+import { useNotification } from "../../../hooks/NotiApi/NotificationContext"; // Adjusted path to parent directory
 
 import { useState, useEffect, useCallback } from "react";
 import { Header } from "@/components/header"
@@ -34,7 +35,16 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
-import { Flag, Search, Filter, Ban, CheckCircle, X, Eye, Trash2 } from "lucide-react";
+import {
+  Flag,
+  Search,
+  Filter,
+  Ban,
+  CheckCircle,
+  X,
+  Eye,
+  Trash2,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
   Dialog,
@@ -46,6 +56,7 @@ import {
 } from "@/components/ui/dialog";
 
 export default function ReportsPage() {
+  const { unreadCount } = useNotification();
   const router = useRouter();
   const [unreadNotifications] = useState(3);
 
@@ -64,52 +75,50 @@ export default function ReportsPage() {
     bySeverity: { low: 0, medium: 0, high: 0, critical: 0 },
   });
 
-  // Filter states
-  const [tempSearchTerm, setTempSearchTerm] = useState("");
-  const [tempSelectedStatus, setTempSelectedStatus] = useState("all");
-  const [tempSelectedSeverity, setTempSelectedSeverity] = useState("all");
-  const [tempSelectedType, setTempSelectedType] = useState("all");
-  const [tempSelectedDate, setTempSelectedDate] = useState("");
-  const [appliedSearchTerm, setAppliedSearchTerm] = useState("");
-  const [appliedSelectedStatus, setAppliedSelectedStatus] = useState("all");
-  const [appliedSelectedSeverity, setAppliedSelectedSeverity] = useState("all");
-  const [appliedSelectedType, setAppliedSelectedType] = useState("all");
-  const [appliedSelectedDate, setAppliedSelectedDate] = useState("");
-
-  const [viewingReport, setViewingReport] = useState<ReportResponse | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState("all");
+  const [selectedSeverity, setSelectedSeverity] = useState("all");
+  const [selectedType, setSelectedType] = useState("all");
+  const [selectedDate, setSelectedDate] = useState("");
+  const [viewingReport, setViewingReport] = useState<ReportResponse | null>(
+    null
+  );
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
 
-  const fetchReports = useCallback(async (page = 0, size = 10) => {
-    try {
-      setLoading(true);
-      const response = await getAllReports(
-        page,
-        size,
-        appliedSelectedStatus === "all" ? undefined : appliedSelectedStatus.toUpperCase() as "PENDING" | "RESOLVED" | "REJECTED" | undefined
-      );
+  const fetchReports = useCallback(
+    async (page = 0, size = 10, status?: string) => {
+      try {
+        setLoading(true);
+        const response = await getAllReports(
+          page,
+          size,
+          status as "PENDING" | "all" | "RESOLVED" | "REJECTED" | undefined
+        );
 
-      console.log("Raw API Response:", response);
-      if (response.content && response.content.length > 0) {
-        console.log("First report:", response.content[0]);
-        console.log("Available fields:", Object.keys(response.content[0]));
-      } else {
-        console.log("No content in response or content is empty.");
+        console.log("Raw API Response:", response);
+        if (response.content && response.content.length > 0) {
+          console.log("First report:", response.content[0]);
+          console.log("Available fields:", Object.keys(response.content[0]));
+        } else {
+          console.log("No content in response or content is empty.");
+        }
+
+        setReports(response.content || []);
+        setTotalPages(response.totalPages);
+        setTotalReports(response.totalElements);
+        setCurrentPage(page);
+      } catch (error) {
+        console.error("Failed to fetch reports:", error);
+        setReports([]);
+        setTotalPages(0);
+        setTotalReports(0);
+        setCurrentPage(0);
+      } finally {
+        setLoading(false);
       }
-
-      setReports(response.content || []);
-      setTotalPages(response.totalPages);
-      setTotalReports(response.totalElements);
-      setCurrentPage(page);
-    } catch (error) {
-      console.error("Failed to fetch reports:", error);
-      setReports([]);
-      setTotalPages(0);
-      setTotalReports(0);
-      setCurrentPage(0);
-    } finally {
-      setLoading(false);
-    }
-  }, [appliedSelectedStatus]);
+    },
+    []
+  );
 
   const fetchStatistics = useCallback(async () => {
     try {
@@ -128,7 +137,11 @@ export default function ReportsPage() {
   }, []);
 
   useEffect(() => {
-    fetchReports(currentPage, 10);
+    fetchReports(
+      currentPage,
+      10,
+      selectedStatus === "all" ? undefined : selectedStatus.toUpperCase()
+    );
     fetchStatistics();
   }, [fetchReports, currentPage, fetchStatistics]);
 
@@ -221,8 +234,12 @@ export default function ReportsPage() {
   const handleStatusChange = async (reportId: string, newStatus: "PENDING" | "RESOLVED" | "REJECTED") => {
     try {
       setLoading(true);
-      await updateReportStatus(reportId, { newStatus });
-      await fetchReports(currentPage, 10);
+      await updateReportStatus(reportId, { newStatus: newStatus });
+      await fetchReports(
+        currentPage,
+        10,
+        selectedStatus === "all" ? undefined : selectedStatus.toUpperCase()
+      );
       await fetchStatistics();
     } catch (error) {
       console.error("Failed to update report status:", error);
@@ -235,9 +252,13 @@ export default function ReportsPage() {
   const handleIndividualDeleteReport = async (reportId: string) => {
     try {
       setLoading(true);
-      await deleteReport(reportId);
-      await fetchReports(currentPage, 10);
-      await fetchStatistics();
+      await deleteReport(reportId); // Gọi API xóa báo cáo đơn lẻ
+      await fetchReports(
+        currentPage,
+        10,
+        selectedStatus === "all" ? undefined : selectedStatus.toUpperCase()
+      );
+      await fetchStatistics(); // Cập nhật thống kê sau khi xóa
     } catch (error) {
       console.error("Failed to delete report:", error);
       alert("Không thể xóa báo cáo.");
@@ -253,7 +274,11 @@ export default function ReportsPage() {
   };
 
   const handleSelectAll = () => {
-    if (selectedReports.length === filteredReports.length && filteredReports.length > 0) {
+    if (
+      selectedReports.length > 0 &&
+      selectedReports.length === filteredReports.length &&
+      filteredReports.length > 0
+    ) {
       setSelectedReports([]);
     } else {
       setSelectedReports(filteredReports.map((report) => report.id));
@@ -264,21 +289,35 @@ export default function ReportsPage() {
     setLoading(true);
     try {
       if (action === "resolve") {
-        await bulkUpdateReportStatus({ reportIds: selectedReports, newStatus: "RESOLVED" });
+        await bulkUpdateReportStatus({
+          reportIds: selectedReports,
+          newStatus: "RESOLVED",
+        });
         alert(`Đã xử lý ${selectedReports.length} báo cáo.`);
       } else if (action === "reject") {
-        await bulkUpdateReportStatus({ reportIds: selectedReports, newStatus: "REJECTED" });
+        await bulkUpdateReportStatus({
+          reportIds: selectedReports,
+          newStatus: "REJECTED",
+        });
         alert(`Đã bỏ qua ${selectedReports.length} báo cáo.`);
       } else if (action === "delete") {
         await bulkDeleteReports(selectedReports);
         alert(`Đã xóa ${selectedReports.length} báo cáo.`);
       }
       setSelectedReports([]);
-      await fetchReports(currentPage, 10);
+      await fetchReports(
+        currentPage,
+        10,
+        selectedStatus === "all" ? undefined : selectedStatus.toUpperCase()
+      );
       await fetchStatistics();
     } catch (error) {
       console.error(`Failed to perform bulk ${action}:`, error);
-      alert(`Không thể thực hiện hành động ${action}. Chi tiết lỗi: ${(error as Error).message}`);
+      alert(
+        `Không thể thực hiện hành động ${action}. Chi tiết lỗi: ${
+          (error as Error).message
+        }`
+      );
     } finally {
       setLoading(false);
     }
@@ -291,19 +330,33 @@ export default function ReportsPage() {
 
   const filteredReports = reports.filter((report) => {
     const matchesSearch =
-      !appliedSearchTerm ||
-      report.reason.toLowerCase().includes(appliedSearchTerm.toLowerCase()) ||
-      report.description?.toLowerCase().includes(appliedSearchTerm.toLowerCase()) ||
-      report.reportedAccountUsername?.toLowerCase().includes(appliedSearchTerm.toLowerCase()) ||
-      report.reporterAccountUsername.toLowerCase().includes(appliedSearchTerm.toLowerCase());
+      !searchTerm ||
+      report.reason.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      report.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      report.reportedAccountUsername
+        ?.toLowerCase()
+        .includes(searchTerm.toLowerCase()) ||
+      report.reporterAccountUsername
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase());
 
-    const matchesStatus = appliedSelectedStatus === "all" || report.status === appliedSelectedStatus;
-    const matchesType = appliedSelectedType === "all" || report.reportType === appliedSelectedType;
-    const matchesSeverity = appliedSelectedSeverity === "all" || report.severity === appliedSelectedSeverity;
+    const matchesStatus =
+      selectedStatus === "all" || report.status === selectedStatus;
+    const matchesType =
+      selectedType === "all" || report.reportType === selectedType;
+    const matchesSeverity =
+      selectedSeverity === "all" || report.severity === selectedSeverity;
     const matchesDate =
-      !appliedSelectedDate || new Date(report.createdAt).toISOString().split("T")[0] === appliedSelectedDate;
+      !selectedDate ||
+      new Date(report.createdAt).toISOString().split("T")[0] === selectedDate;
 
-    return matchesSearch && matchesStatus && matchesType && matchesSeverity && matchesDate;
+    return (
+      matchesSearch &&
+      matchesStatus &&
+      matchesType &&
+      matchesSeverity &&
+      matchesDate
+    );
   });
 
   const statusLabels: { [key: string]: string } = {
@@ -360,7 +413,9 @@ export default function ReportsPage() {
           key={i}
           size="sm"
           onClick={() => setCurrentPage(i)}
-          className={currentPage === i ? "bg-orange-500 text-white" : "variant-outline"}
+          className={
+            currentPage === i ? "bg-orange-500 text-white" : "variant-outline"
+          }
           disabled={loading}
         >
           {i + 1}
@@ -373,7 +428,9 @@ export default function ReportsPage() {
         key="next"
         variant="outline"
         size="sm"
-        onClick={() => setCurrentPage((prev) => Math.min(totalPages - 1, prev + 1))}
+        onClick={() =>
+          setCurrentPage((prev) => Math.min(totalPages - 1, prev + 1))
+        }
         disabled={currentPage === totalPages - 1 || loading}
       >
         »
@@ -387,39 +444,53 @@ export default function ReportsPage() {
       <Header
         title="Quản lý Báo cáo"
         showSearch={false}
-        notificationCount={unreadNotifications}
+        userName="Nguyễn Huỳnh Quốc Tuấn"
+        onLogout={handleLogout}
+        notificationCount={unreadCount}
       />
 
       {/* Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        {Object.entries(reportStats).slice(0, 4).map(([key, value]) => (
-          <Card key={key}>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">{statusLabels[key]}</p>
-                  <p
-                    className={`text-2xl font-bold ${
-                      key === "pending"
-                        ? "text-yellow-600"
-                        : key === "resolved"
-                        ? "text-green-600"
-                        : key === "rejected"
-                        ? "text-gray-600"
-                        : "text-blue-500"
-                    }`}
-                  >
-                    {typeof value === "number" ? value : JSON.stringify(value)}
-                  </p>
+        {Object.entries(reportStats)
+          .slice(0, 4)
+          .map(([key, value]) => (
+            <Card key={key}>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600">{statusLabels[key]}</p>
+                    <p
+                      className={`text-2xl font-bold ${
+                        key === "pending"
+                          ? "text-yellow-600"
+                          : key === "resolved"
+                          ? "text-green-600"
+                          : key === "rejected"
+                          ? "text-gray-600"
+                          : "text-blue-500"
+                      }`}
+                    >
+                      {typeof value === "number"
+                        ? value
+                        : JSON.stringify(value)}
+                    </p>
+                  </div>
+                  {key === "total" && (
+                    <Flag className="w-8 h-8 text-blue-500" />
+                  )}
+                  {key === "pending" && (
+                    <Flag className="w-8 h-8 text-yellow-500" />
+                  )}
+                  {key === "resolved" && (
+                    <CheckCircle className="w-8 h-8 text-green-500" />
+                  )}
+                  {key === "rejected" && (
+                    <X className="w-8 h-8 text-gray-500" />
+                  )}
                 </div>
-                {key === "total" && <Flag className="w-8 h-8 text-blue-500" />}
-                {key === "pending" && <Flag className="w-8 h-8 text-yellow-500" />}
-                {key === "resolved" && <CheckCircle className="w-8 h-8 text-green-500" />}
-                {key === "rejected" && <X className="w-8 h-8 text-gray-500" />}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          ))}
       </div>
 
       <Card>
@@ -464,7 +535,8 @@ export default function ReportsPage() {
                     <AlertDialogHeader>
                       <AlertDialogTitle>Xác nhận xóa báo cáo</AlertDialogTitle>
                       <AlertDialogDescription>
-                        Bạn có chắc chắn muốn xóa {selectedReports.length} báo cáo đã chọn? Hành động này không thể hoàn tác.
+                        Bạn có chắc chắn muốn xóa {selectedReports.length} báo
+                        cáo đã chọn? Hành động này không thể hoàn tác.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -494,7 +566,10 @@ export default function ReportsPage() {
                     <AlertDialogHeader>
                       <AlertDialogTitle>Xác nhận khóa tài khoản và xóa báo cáo</AlertDialogTitle>
                       <AlertDialogDescription>
-                        Bạn có chắc chắn muốn thực hiện hành động này? Hành động này sẽ **xóa các báo cáo đã chọn** và ngụ ý rằng bạn sẽ **thực hiện việc khóa tài khoản người dùng liên quan một cách riêng biệt** nếu có.
+                        Bạn có chắc chắn muốn thực hiện hành động này? Hành động
+                        này sẽ **xóa các báo cáo đã chọn** và ngụ ý rằng bạn sẽ
+                        **thực hiện việc khóa tài khoản người dùng liên quan một
+                        cách riêng biệt** nếu có.
                         <br />
                         **Lưu ý: Việc xóa báo cáo không thể hoàn tác.**
                       </AlertDialogDescription>
@@ -572,11 +647,20 @@ export default function ReportsPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-end space-x-2">
+            <div className="flex items-end">
               <Button
-                className="flex-1 bg-orange-500 hover:bg-orange-600"
-                onClick={handleApplyFilter}
-                disabled={loading}
+                className="w-full"
+                variant="outline"
+                onClick={() => {
+                  fetchReports(
+                    0,
+                    10,
+                    selectedStatus === "all"
+                      ? undefined
+                      : selectedStatus.toUpperCase()
+                  );
+                  setCurrentPage(0);
+                }}
               >
                 <Filter className="w-4 h-4 mr-2" />
                 Áp dụng bộ lọc
@@ -648,7 +732,11 @@ export default function ReportsPage() {
                     <input
                       type="checkbox"
                       className="rounded"
-                      checked={selectedReports.length === filteredReports.length && filteredReports.length > 0}
+                      checked={
+                        selectedReports.length > 0 &&
+                        selectedReports.length === filteredReports.length &&
+                        filteredReports.length > 0
+                      }
                       onChange={handleSelectAll}
                     />
                   </th>
@@ -688,9 +776,15 @@ export default function ReportsPage() {
                       </td>
                       <td className="py-3 px-4 text-gray-600">{currentPage * 10 + index + 1}</td>
                       <td className="py-3 px-4 font-medium">
-                        <p className="font-medium">{report.reportedAccountUsername || "Không xác định"}</p>
+                        {/* CHỈ HIỂN THỊ TÊN NGƯỜI BỊ BÁO CÁO */}
+                        <p className="font-medium">
+                          {report.reportedAccountUsername || "Không xác định"}
+                        </p>
+                        {/* Đã bỏ dòng hiển thị email */}
                       </td>
-                      <td className="py-3 px-4 text-gray-600">{report.reporterAccountUsername || "N/A"}</td>
+                      <td className="py-3 px-4 text-gray-600">
+                        {report.reporterAccountUsername || "N/A"}
+                      </td>
                       <td className="py-3 px-4 text-gray-600 max-w-xs">
                         <div className="truncate" title={report.reason}>
                           {report.reason}
@@ -746,15 +840,20 @@ export default function ReportsPage() {
                             </AlertDialogTrigger>
                             <AlertDialogContent>
                               <AlertDialogHeader>
-                                <AlertDialogTitle>Xác nhận xóa báo cáo</AlertDialogTitle>
+                                <AlertDialogTitle>
+                                  Xác nhận xóa báo cáo
+                                </AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  Bạn có chắc chắn muốn xóa báo cáo này? Hành động này không thể hoàn tác.
+                                  Bạn có chắc chắn muốn xóa báo cáo này? Hành
+                                  động này không thể hoàn tác.
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
                                 <AlertDialogCancel>Hủy</AlertDialogCancel>
                                 <AlertDialogAction
-                                  onClick={() => handleIndividualDeleteReport(report.id)}
+                                  onClick={() =>
+                                    handleIndividualDeleteReport(report.id)
+                                  }
                                   className="bg-red-600 hover:bg-red-700"
                                 >
                                   Xóa
@@ -809,7 +908,9 @@ export default function ReportsPage() {
                 <div>
                   <Label className="text-sm font-medium text-gray-700">Ngày báo cáo</Label>
                   <p className="text-sm text-gray-900 mt-1">
-                    {new Date(viewingReport.createdAt).toLocaleDateString("vi-VN")}
+                    {new Date(viewingReport.createdAt).toLocaleDateString(
+                      "vi-VN"
+                    )}
                   </p>
                 </div>
                 <div>
@@ -839,8 +940,9 @@ export default function ReportsPage() {
                       alt="Bằng chứng"
                       className="max-w-[200px] h-auto rounded-md shadow-sm"
                       onError={(e) => {
-                        e.currentTarget.src = "https://via.placeholder.com/150?text=No+Image";
-                      }}
+                        e.currentTarget.src =
+                          "https://via.placeholder.com/150?text=No+Image";
+                      }} // Fallback nếu ảnh lỗi
                     />
                   </div>
                 </div>
@@ -854,7 +956,10 @@ export default function ReportsPage() {
           )}
 
           <DialogFooter className="mt-6 flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setIsViewDialogOpen(false)}
+            >
               Đóng
             </Button>
             {viewingReport?.status.toLowerCase() === "pending" && (
