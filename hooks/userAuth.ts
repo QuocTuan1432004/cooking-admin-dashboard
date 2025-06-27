@@ -55,7 +55,7 @@ export const useAuth = () => {
   };
 
   const decoded = getDecodedToken();
-  console.log("🔍 Decoded token:", decoded);
+  // console.log("🔍 Decoded token:", decoded);
   const userId = decoded?.id || null;      // ✅ UUID từ claim 'id'
   const email = decoded?.sub || null;      // ✅ email từ 'sub'
   const roles = decoded?.roles || [];      // ✅ quyền từ token

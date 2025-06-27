@@ -11,7 +11,7 @@ export interface NotificationResponse {
   title: string;
   message: string;
   notificationType: string;
-  senderUsername: string | null;
+  senderUsername?: string | null;
   recipientUsername: string | null;
   type: "recipe" | "user" | "comment" | "system" | "report";
   date: string;
@@ -42,9 +42,19 @@ class NotificationApi {
   private connectAttempts: number = 0;
   private maxAttempts: number = 10;
   private reconnectTimeout: number = 2000; // 2 giây giữa các lần retry
+  private processedNotificationIds: Set<string> = new Set();
 
   constructor() {
     this.setupConnectionMonitor();
+    if (typeof window !== 'undefined') {
+      try {
+        const savedIds = JSON.parse(localStorage.getItem('processedNotificationIds') || '[]');
+        savedIds.forEach((id: string) => this.processedNotificationIds.add(id));
+        console.log(`📋 Đã tải ${this.processedNotificationIds.size} ID thông báo đã xử lý`);
+      } catch (error) {
+        console.error('❌ Lỗi khi tải ID đã xử lý:', error);
+      }
+    }
   }
 
   private getTokenFromCookie(name: string): string | null {
@@ -156,15 +166,47 @@ class NotificationApi {
         console.error("❌ Received message with no body");
         return;
       }
-
+  
       const notification: NotificationResponse = JSON.parse(message.body);
       console.log("📢 Processed WebSocket notification:", notification);
-
+  
       if (!notification.id) {
         console.error("❌ Notification missing required 'id' field");
         return;
       }
-
+  
+      // 👉 Lấy thông tin từ token
+      const token = this.getTokenFromCookie("auth_token");
+      const decodedToken = token ? JSON.parse(atob(token.split('.')[1])) : null;
+      const currentUserId = decodedToken?.id;
+      const currentRoles: string[] = decodedToken?.scope?.split(" ") || [];
+  
+      console.log("👤 CurrentUserId:", currentUserId);
+      console.log("🔐 CurrentRoles:", currentRoles);
+  
+      const isAdmin = currentRoles.includes("ROLE_ADMIN");
+  
+      // 👉 Kiểm tra thông báo có dành cho người dùng hiện tại không
+      const isForCurrentUser =
+        notification.recipientId === currentUserId ||
+        (notification.recipientUsername === "admin" && isAdmin);
+  
+      if (!isForCurrentUser) {
+        console.log(`🚫 Notification ${notification.id} không dành cho bạn (userId: ${currentUserId}), bỏ qua`);
+        return;
+      }
+  
+      // 🔒 Kiểm tra đã xử lý chưa
+      if (this.processedNotificationIds.has(notification.id)) {
+        console.log(`⚠️ Bỏ qua thông báo đã xử lý: ${notification.id}`);
+        return;
+      }
+  
+      // ✅ Đánh dấu đã xử lý
+      this.processedNotificationIds.add(notification.id);
+      this.saveProcessedIds();
+  
+      // 🔔 Gửi callback
       this.callbacks.forEach((callback) => {
         try {
           callback(notification);
@@ -176,6 +218,8 @@ class NotificationApi {
       console.error("❌ Error processing WebSocket message:", error);
     }
   };
+  
+  
 
   registerCallback(callback: NotificationCallback): void {
     this.callbacks.push(callback);
@@ -242,19 +286,31 @@ class NotificationApi {
     try {
       const response = await authenticatedFetch(`${BASE_URL}?page=${page}&size=${size}`);
       if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-
+  
       const data = await response.json();
-      console.log("📋 getNotifications Response:", data);
-
+      const raw = data.content || data.result?.content || [];
+  
+      // 👇 Thêm bước lọc chỉ giữ thông báo dành cho admin
+      const token = this.getTokenFromCookie("auth_token");
+      const decoded = token ? JSON.parse(atob(token.split('.')[1])) : null;
+      const currentUserId = decoded?.id;
+      const currentUsername = decoded?.sub;
+      const roles: string[] = decoded?.scope?.split(" ") || [];
+  
+      const filtered = raw.filter((n: { recipientId: any; recipientUsername: string; }) =>
+        n.recipientId === currentUserId ||
+        (n.recipientUsername === "admin" && roles.includes("ROLE_ADMIN"))
+      );
+  
       return {
-        content: data.content || data.result?.content || [],
+        content: filtered,
         totalPages: data.totalPages || data.result?.totalPages || 1,
-        totalElements: data.totalElements || data.result?.totalElements || 0,
+        totalElements: filtered.length,
         size: data.size || data.result?.size || size,
         number: data.number || data.result?.number || page,
         first: data.first || data.result?.first || (page === 0),
-        last: data.last || data.result?.last || (page >= (data.totalPages - 1) || data.result?.totalPages - 1),
-        empty: data.empty || data.result?.empty || (data.content?.length === 0 || data.result?.content?.length === 0),
+        last: data.last || data.result?.last || (page >= ((data.totalPages || 1) - 1)),
+        empty: filtered.length === 0,
       };
     } catch (error) {
       console.error("❌ Failed to fetch notifications:", error);
@@ -270,6 +326,7 @@ class NotificationApi {
       };
     }
   }
+  
 
   async getDismissedNotifications(page: number = 0, size: number = 10): Promise<PaginatedResponse<NotificationResponse>> {
     try {
@@ -411,6 +468,26 @@ class NotificationApi {
       console.error("❌ Error fetching unread count:", error);
       return 0;
     }
+  }
+
+  private saveProcessedIds(): void {
+    if (typeof window !== 'undefined') {
+      try {
+        const recentIds = Array.from(this.processedNotificationIds).slice(-100);
+        localStorage.setItem('processedNotificationIds', JSON.stringify(recentIds));
+      } catch (error) {
+        console.error('❌ Lỗi khi lưu ID đã xử lý:', error);
+      }
+    }
+  }
+
+  public isProcessedNotification(id: string): boolean {
+    return this.processedNotificationIds.has(id);
+  }
+
+  public markAsProcessed(id: string): void {
+    this.processedNotificationIds.add(id);
+    this.saveProcessedIds();
   }
 }
 

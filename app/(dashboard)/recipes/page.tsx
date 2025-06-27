@@ -13,11 +13,14 @@ import {
   changeRecipeStatus,
   deleteRecipe,
 } from "@/hooks/RecipeApi/recipeApi";
-import { notificationApi } from "@/hooks/NotiApi/NotiApi";
+import { useNotification } from "@/hooks/NotiApi/NotificationContext";
 
 export default function RecipesPage() {
   const router = useRouter();
-  const [unreadNotifications, setUnreadNotifications] = useState(0);
+
+  // Use notification context instead of local state
+  const { unreadCount } = useNotification();
+
   const [isIngredientEditOpen, setIsIngredientEditOpen] = useState(false);
   const [isIngredientDeleteOpen, setIsIngredientDeleteOpen] = useState(false);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
@@ -33,38 +36,8 @@ export default function RecipesPage() {
     loadRecipes();
   }, [currentPage]);
 
-  // Thêm useEffect để lấy số thông báo chưa đọc và lắng nghe thông báo mới
-  useEffect(() => {
-    // Hàm lấy số thông báo chưa đọc
-    const fetchUnreadCount = async () => {
-      try {
-        const count = await notificationApi.getUnreadCount();
-        setUnreadNotifications(count);
-      } catch (error) {
-        console.error("Failed to fetch unread notifications count:", error);
-      }
-    };
-
-    // Lấy số lượng thông báo chưa đọc khi component mount
-    fetchUnreadCount();
-
-    // Đăng ký callback để cập nhật khi có thông báo mới
-    const handleNewNotification = (notification: any) => {
-      if (!notification.readStatus) {
-        setUnreadNotifications((prev) => prev + 1);
-      }
-    };
-
-    // Đảm bảo WebSocket được kết nối
-    notificationApi.connect().then(() => {
-      notificationApi.registerCallback(handleNewNotification);
-    });
-
-    // Cleanup khi component unmount
-    return () => {
-      notificationApi.unregisterCallback(handleNewNotification);
-    };
-  }, []);
+  // Remove the duplicate notification management useEffect
+  // NotificationContext will handle all notification counting
 
   const loadRecipes = async () => {
     try {
@@ -87,7 +60,7 @@ export default function RecipesPage() {
           rating: 0,
           views: Number.parseInt(apiRecipe.totalLikes?.toString() || "0"),
           description: apiRecipe.description,
-          difficulty: apiRecipe.difficulty, // THÊM DÒNG NÀY
+          difficulty: apiRecipe.difficulty,
           ingredients: [],
           instructions: [],
           cookingTime: apiRecipe.cookingTime,
@@ -107,7 +80,6 @@ export default function RecipesPage() {
   };
 
   const handleStatusChange = async (recipeId: string) => {
-    // Thay đổi từ number thành string
     try {
       setLoading(true);
       await changeRecipeStatus(recipeId);
@@ -122,7 +94,6 @@ export default function RecipesPage() {
   };
 
   const handleDeleteRecipe = async (recipeId: string) => {
-    // Thay đổi từ number thành string
     try {
       setLoading(true);
       await deleteRecipe(recipeId);
@@ -175,7 +146,7 @@ export default function RecipesPage() {
           showSearch={false}
           userName="Nguyễn Huỳnh Quốc Tuấn"
           onLogout={handleLogout}
-          notificationCount={unreadNotifications}
+          notificationCount={unreadCount}
         />
 
         {/* Error Message */}
@@ -203,9 +174,9 @@ export default function RecipesPage() {
           recipes={recipes}
           onRecipeUpdate={handleRecipeUpdate}
           showApprovalActions={true}
-          showFilters={false} // Thay đổi từ true thành false để ẩn bộ lọc
-          showStats={false} // Thay đổi từ true thành false để ẩn stats (đánh giá TB, tổng lượt xem)
-          showBulkActions={false} // Thay đổi từ true thành false để ẩn bulk actions (chọn tất cả)
+          showFilters={false}
+          showStats={false}
+          showBulkActions={false}
           title={`Danh sách công thức (${totalElements} công thức)`}
           onAddRecipe={() => router.push("/recipes/create")}
           onEditIngredients={() => setIsIngredientEditOpen(true)}
