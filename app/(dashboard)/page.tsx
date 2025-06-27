@@ -479,7 +479,7 @@ export default function DashboardPage() {
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-10">
           {dashboardStats.map((stat, index) => (
-            <StatCard key={index} {...stat} colorIndex={index} loading={loading} />
+            <StatCard key={index} {...stat} colorIndex={index} />
           ))}
         </div>
 

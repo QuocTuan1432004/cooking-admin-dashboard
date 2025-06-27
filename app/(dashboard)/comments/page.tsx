@@ -692,8 +692,6 @@ export default function CommentsPage() {
           <Header
             title="Quản lý Bình luận"
             showSearch={false}
-            userName="Nguyễn Huỳnh Quốc Tuấn"
-            onLogout={handleLogout}
             notificationCount={unreadCount} // Thêm prop này
           />
 

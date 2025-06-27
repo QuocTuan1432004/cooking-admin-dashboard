@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Search, Eye, Edit, Trash2, SortAsc, SortDesc, AlertTriangle, Tag } from "lucide-react"
 import { Label } from "@/components/ui/label"
+import { findRecipesByKeyword } from "@/hooks/RecipeApi/recipeApi"
 
 // Import Recipe interface từ recipe-detail-modal để đảm bảo consistency
 import type { Recipe } from "./recipe-detail-modal"
@@ -43,28 +44,65 @@ export function RecipeTableEnhanced({
   showSelection = false,
 }: RecipeTableEnhancedProps) {
   const [searchTerm, setSearchTerm] = useState("")
+  const [searchResults, setSearchResults] = useState<Recipe[] | null>(null)
+  const [searchLoading, setSearchLoading] = useState(false)
   const [sortBy, setSortBy] = useState<keyof Recipe>("name")
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [categoryFilter, setCategoryFilter] = useState<string>("all")
   const [deleteRecipeId, setDeleteRecipeId] = useState<string | null>(null)
 
-  // Filtering and sorting logic
-  const filteredRecipes = recipes.filter((recipe) => {
+  // Gọi API khi searchTerm thay đổi (debounce 400ms)
+  useEffect(() => {
+    if (!searchTerm) {
+      setSearchResults(null)
+      return
+    }
+    const timeout = setTimeout(async () => {
+      setSearchLoading(true)
+      try {
+        const apiResults = await findRecipesByKeyword(searchTerm)
+        // Chuyển đổi sang Recipe nếu cần
+        setSearchResults(
+          apiResults.map((apiRecipe: any) => ({
+            id: apiRecipe.id,
+            name: apiRecipe.title,
+            title: apiRecipe.title,
+            category: apiRecipe.subCategoryName || "Không xác định",
+            author: apiRecipe.accountName || "Không xác định",
+            date: new Date(apiRecipe.createAt).toLocaleDateString("vi-VN"),
+            image: apiRecipe.image || "/placeholder.svg?height=60&width=60",
+            status: apiRecipe.status,
+            rating: 0,
+            views: Number.parseInt(apiRecipe.totalLikes?.toString() || "0"),
+            description: apiRecipe.description,
+            difficulty: apiRecipe.difficulty,
+            ingredients: [],
+            instructions: [],
+            cookingTime: apiRecipe.cookingTime,
+            servings: 4,
+          }))
+        )
+      } catch (e) {
+        setSearchResults([])
+      } finally {
+        setSearchLoading(false)
+      }
+    }, 400)
+    return () => clearTimeout(timeout)
+  }, [searchTerm])
+
+  // Sử dụng searchResults nếu có, ngược lại dùng recipes gốc
+  const filteredRecipes = (searchResults !== null ? searchResults : recipes).filter((recipe) => {
     const recipeName = recipe.name || recipe.title || ""
     const recipeAuthor = recipe.author || recipe.accountName || ""
     const recipeCategory = recipe.category || recipe.subCategoryName || ""
-
-    const matchesSearch =
-      recipeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      recipeAuthor.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      recipeCategory.toLowerCase().includes(searchTerm.toLowerCase())
 
     const matchesStatus = statusFilter === "all" || recipe.status === statusFilter
     const matchesCategory =
       categoryFilter === "all" || recipeCategory.toLowerCase().includes(categoryFilter.toLowerCase())
 
-    return matchesSearch && matchesStatus && matchesCategory
+    return matchesStatus && matchesCategory
   })
 
   const sortedRecipes = [...filteredRecipes].sort((a, b) => {
@@ -376,6 +414,14 @@ export function RecipeTableEnhanced({
           )}
         </CardContent>
       </Card>
+
+      {/* Loading State */}
+      {searchLoading && (
+        <div className="flex justify-center items-center py-8">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <span className="ml-2 text-gray-600">Đang tìm kiếm công thức...</span>
+        </div>
+      )}
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteRecipeId !== null} onOpenChange={(open) => !open && handleDeleteCancel()}>
