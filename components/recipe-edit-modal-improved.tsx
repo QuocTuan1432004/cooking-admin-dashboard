@@ -1,6 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import type React from "react"
+
+import { useState, useEffect, useMemo } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -8,32 +10,89 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Trash2, Save, X, Search, Edit, Clock } from "lucide-react"
+import { Save, X, Search, Edit, ChefHat, Loader2, Clock } from "lucide-react"
 import Image from "next/image"
+import { toast } from "sonner"
+import { Badge } from "@/components/ui/badge"
+
+// Import API functions
+import { updateRecipe, changeRecipeStatus, changeRecipeStatusToNotApproved, changeStatusToPending } from "@/hooks/RecipeApi/recipeApi"
+import {
+  getRecipeIngredientsByRecipeId,
+  createRecipeIngredient,
+  deleteRecipeIngredient,
+} from "@/hooks/RecipeApi/recipeIngredients"
+import {
+  getRecipeStepsByRecipeId,
+  createRecipeStep,
+  deleteRecipeStep,
+  updateRecipeStep,
+} from "@/hooks/RecipeApi/recipeSteps"
+import { getAllMainCategories, getSubCategoriesByMainId } from "@/hooks/categoryApi/categoryApi"
+import { getAllIngredients } from "@/hooks/RecipeApi/ingredientsApi"
+
 import type { Recipe } from "./recipe-detail-modal"
-import type { Ingredient } from "@/hooks/RecipeApi/recipeTypes"
+import type {
+  Ingredient,
+  RecipeIngredientsResponse,
+  RecipeStepsResponse,
+  RecipeUpdateRequest,
+  RecipeIngredientsCreationRequest,
+  RecipeStepsCreationRequest,
+  RecipeStepsUpdateRequest,
+} from "@/hooks/RecipeApi/recipeTypes"
+import type { Category, SubCategory } from "@/hooks/categoryApi/types"
+
 import { IngredientSelectModal } from "./ingredient-select-modal"
-import { InstructionAddModal, type Instruction } from "./instruction-add-modal"
+import { InstructionModal } from "./instruction-modal"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 interface RecipeEditModalProps {
   recipe: Recipe | null
   isOpen: boolean
   onClose: () => void
   onSave: (recipe: Recipe) => void
-  ingredients?: Ingredient[]
 }
 
-const CATEGORIES = ["Món kho", "Món xào", "Món canh", "Món nước", "Món tráng miệng", "Món chính", "Món phụ"]
+// Thêm interface cho detailed instruction để xử lý ảnh
+interface DetailedInstruction {
+  step: number
+  description: string
+  time?: string
+  image?: string
+  imageFile?: File
+}
 
-export function RecipeEditModalImproved({ recipe, isOpen, onClose, onSave, ingredients = [] }: RecipeEditModalProps) {
+export function RecipeEditModalImproved({ recipe, isOpen, onClose, onSave }: RecipeEditModalProps) {
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [isIngredientSelectOpen, setIsIngredientSelectOpen] = useState(false)
   const [isInstructionModalOpen, setIsInstructionModalOpen] = useState(false)
-  const [editingInstructionIndex, setEditingInstructionIndex] = useState<number | null>(null)
-  const [detailedInstructions, setDetailedInstructions] = useState<Instruction[]>([])
 
-  // Đồng bộ recipe với editingRecipe khi modal mở
+  // Loading states
+  const [isSaving, setIsSaving] = useState(false)
+  const [isLoadingIngredients, setIsLoadingIngredients] = useState(false)
+  const [isLoadingSteps, setIsLoadingSteps] = useState(false)
+  const [isLoadingCategories, setIsLoadingCategories] = useState(false)
+  const [isLoadingAllIngredients, setIsLoadingAllIngredients] = useState(false)
+
+  // Recipe data from API
+  const [recipeIngredients, setRecipeIngredients] = useState<RecipeIngredientsResponse[]>([])
+  const [recipeSteps, setRecipeSteps] = useState<RecipeStepsResponse[]>([])
+  const [imageFile, setImageFile] = useState<File | null>(null)
+
+  // Thêm state để lưu detailed instructions với ảnh
+  const [detailedInstructions, setDetailedInstructions] = useState<DetailedInstruction[]>([])
+
+  // Category data from API
+  const [categories, setCategories] = useState<Category[]>([])
+  const [subCategories, setSubCategories] = useState<SubCategory[]>([])
+  const [selectedMainCategoryId, setSelectedMainCategoryId] = useState<string>("")
+
+  // Ingredients data from API
+  const [allIngredients, setAllIngredients] = useState<Ingredient[]>([])
+
+  // Load recipe data when modal opens
   useEffect(() => {
     if (isOpen && recipe) {
       setEditingRecipe({
@@ -41,22 +100,229 @@ export function RecipeEditModalImproved({ recipe, isOpen, onClose, onSave, ingre
         ingredients: recipe.ingredients || [],
         instructions: recipe.instructions || [],
       })
-
-      // Convert simple instructions to detailed instructions
-      const detailed = (recipe.instructions || []).map((instruction, index) => ({
-        step: index + 1,
-        description: instruction,
-        time: undefined,
-        image: undefined,
-      }))
-      setDetailedInstructions(detailed)
       setErrors({})
+      loadInitialData(recipe.id)
     } else if (!isOpen) {
-      setEditingRecipe(null)
-      setDetailedInstructions([])
-      setErrors({})
+      resetModalState()
     }
   }, [isOpen, recipe])
+
+  // Auto-select categories when data is loaded
+  useEffect(() => {
+    if (categories.length > 0 && editingRecipe && !selectedMainCategoryId) {
+      identifyCurrentCategories()
+    }
+  }, [categories, editingRecipe])
+
+  const resetModalState = () => {
+    setEditingRecipe(null)
+    setErrors({})
+    setRecipeIngredients([])
+    setRecipeSteps([])
+    setDetailedInstructions([])
+    setImageFile(null)
+    setCategories([])
+    setSubCategories([])
+    setSelectedMainCategoryId("")
+    setAllIngredients([])
+    setIsSaving(false)
+    setIsLoadingIngredients(false)
+    setIsLoadingSteps(false)
+    setIsLoadingCategories(false)
+    setIsLoadingAllIngredients(false)
+  }
+
+  const loadInitialData = async (recipeId: string) => {
+    try {
+      // Load all data in parallel
+      await Promise.all([
+        loadRecipeIngredients(recipeId),
+        loadRecipeSteps(recipeId),
+        loadCategories(),
+        loadAllIngredients(),
+      ])
+    } catch (error) {
+      console.error("Error loading initial data:", error)
+      toast.error("Không thể tải dữ liệu")
+    }
+  }
+
+  const loadAllIngredients = async () => {
+    try {
+      setIsLoadingAllIngredients(true)
+      const ingredientsData = await getAllIngredients()
+      setAllIngredients(ingredientsData)
+      console.log("Loaded ingredients:", ingredientsData)
+    } catch (error) {
+      console.error("Error loading ingredients:", error)
+      toast.error("Không thể tải danh sách nguyên liệu")
+    } finally {
+      setIsLoadingAllIngredients(false)
+    }
+  }
+
+  const loadCategories = async () => {
+    try {
+      setIsLoadingCategories(true)
+      const categoryData = await getAllMainCategories()
+      setCategories(categoryData)
+    } catch (error) {
+      console.error("Error loading categories:", error)
+      toast.error("Không thể tải danh sách danh mục")
+    } finally {
+      setIsLoadingCategories(false)
+    }
+  }
+
+  const identifyCurrentCategories = async () => {
+    if (!editingRecipe || !categories.length) return
+
+    try {
+      console.log("Identifying categories for recipe:", editingRecipe)
+      console.log("Recipe subcategoryId:", editingRecipe.subcategoryId)
+      console.log("Recipe category:", editingRecipe.category)
+
+      let foundMainCategory: Category | null = null
+      let foundSubCategory: SubCategory | null = null
+
+      // Method 1: Find by subcategoryId (most reliable)
+      if (editingRecipe.subcategoryId) {
+        for (const mainCategory of categories) {
+          try {
+            const subCategoriesData = await getSubCategoriesByMainId(mainCategory.id)
+            const matchingSubCategory = subCategoriesData.find((sub) => sub.id === editingRecipe.subcategoryId)
+
+            if (matchingSubCategory) {
+              foundMainCategory = mainCategory
+              foundSubCategory = matchingSubCategory
+              setSubCategories(subCategoriesData)
+              break
+            }
+          } catch (error) {
+            console.error(`Error loading subcategories for ${mainCategory.id}:`, error)
+          }
+        }
+      }
+
+      // Method 2: Find by category name if subcategoryId method failed
+      if (!foundMainCategory && editingRecipe.category) {
+        for (const mainCategory of categories) {
+          try {
+            const subCategoriesData = await getSubCategoriesByMainId(mainCategory.id)
+            const matchingSubCategory = subCategoriesData.find(
+              (sub) =>
+                sub.subCategoryName === editingRecipe.category ||
+                (editingRecipe.category && sub.subCategoryName.toLowerCase() === editingRecipe.category.toLowerCase()),
+            )
+
+            if (matchingSubCategory) {
+              foundMainCategory = mainCategory
+              foundSubCategory = matchingSubCategory
+              setSubCategories(subCategoriesData)
+
+              // Update recipe with correct subcategoryId if it was missing
+              if (!editingRecipe.subcategoryId) {
+                updateEditingRecipe("subcategoryId", matchingSubCategory.id)
+              }
+              break
+            }
+          } catch (error) {
+            console.error(`Error loading subcategories for ${mainCategory.id}:`, error)
+          }
+        }
+      }
+
+      // Set the found categories
+      if (foundMainCategory && foundSubCategory) {
+        console.log("Found categories:", {
+          mainCategory: foundMainCategory.name,
+          subCategory: foundSubCategory.subCategoryName,
+        })
+
+        setSelectedMainCategoryId(foundMainCategory.id)
+
+        // Update recipe data with correct information
+        updateEditingRecipe("category", foundSubCategory.subCategoryName)
+        updateEditingRecipe("subcategoryId", foundSubCategory.id)
+
+        toast.success(`Đã xác định danh mục: ${foundMainCategory.name} > ${foundSubCategory.subCategoryName}`)
+      } else {
+        console.warn("Could not identify current categories for recipe")
+        toast.warning("Không thể xác định danh mục hiện tại của công thức")
+
+        // Set empty subcategories for the first main category as fallback
+        if (categories.length > 0) {
+          const firstMainCategory = categories[0]
+          const subCategoriesData = await getSubCategoriesByMainId(firstMainCategory.id)
+          setSubCategories(subCategoriesData)
+        }
+      }
+    } catch (error) {
+      console.error("Error identifying current categories:", error)
+      toast.error("Lỗi khi xác định danh mục hiện tại")
+    }
+  }
+
+  const loadSubCategories = async (mainCategoryId: string) => {
+    try {
+      const subCategoryData = await getSubCategoriesByMainId(mainCategoryId)
+      setSubCategories(subCategoryData)
+    } catch (error) {
+      console.error("Error loading subcategories:", error)
+      toast.error("Không thể tải danh sách danh mục con")
+      setSubCategories([])
+    }
+  }
+
+  const loadRecipeIngredients = async (recipeId: string) => {
+    try {
+      setIsLoadingIngredients(true)
+      const ingredients = await getRecipeIngredientsByRecipeId(recipeId)
+      setRecipeIngredients(ingredients)
+
+      // Update editing recipe with formatted ingredients
+      const formattedIngredients = ingredients.map((ing) =>
+        `${ing.quantity || ""} ${ing.unit || ""} ${ing.ingredientName}`.trim(),
+      )
+
+      setEditingRecipe((prev) => (prev ? { ...prev, ingredients: formattedIngredients } : null))
+    } catch (error) {
+      console.error("Error loading ingredients:", error)
+      toast.error("Không thể tải danh sách nguyên liệu")
+    } finally {
+      setIsLoadingIngredients(false)
+    }
+  }
+
+  const loadRecipeSteps = async (recipeId: string) => {
+    try {
+      setIsLoadingSteps(true)
+      const steps = await getRecipeStepsByRecipeId(recipeId)
+      setRecipeSteps(steps)
+
+      // Tạo detailed instructions với đầy đủ thông tin bao gồm ảnh
+      const detailedSteps: DetailedInstruction[] = steps
+        .sort((a, b) => a.step - b.step)
+        .map((step) => ({
+          step: step.step,
+          description: step.description,
+          time: step.waitingTime || "",
+          image: step.recipeStepImage || "", // Lấy ảnh từ API
+        }))
+
+      setDetailedInstructions(detailedSteps)
+
+      // Update editing recipe với chỉ descriptions để tương thích với code cũ
+      const formattedSteps = steps.sort((a, b) => a.step - b.step).map((step) => step.description)
+
+      setEditingRecipe((prev) => (prev ? { ...prev, instructions: formattedSteps } : null))
+    } catch (error) {
+      console.error("Error loading steps:", error)
+      toast.error("Không thể tải các bước hướng dẫn")
+    } finally {
+      setIsLoadingSteps(false)
+    }
+  }
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {}
@@ -65,19 +331,19 @@ export function RecipeEditModalImproved({ recipe, isOpen, onClose, onSave, ingre
       newErrors.name = "Tên công thức không được để trống"
     }
 
-    if (!editingRecipe?.category?.trim()) {
-      newErrors.category = "Danh mục không được để trống"
+    if (!editingRecipe?.subcategoryId?.trim()) {
+      newErrors.subcategoryId = "Danh mục không được để trống"
     }
 
     if (!editingRecipe?.description?.trim()) {
       newErrors.description = "Mô tả không được để trống"
     }
 
-    if (!editingRecipe?.ingredients?.some((ing) => ing.trim())) {
+    if (!recipeIngredients || recipeIngredients.length === 0) {
       newErrors.ingredients = "Phải có ít nhất một nguyên liệu"
     }
 
-    if (detailedInstructions.length === 0 || !detailedInstructions.some((inst) => inst.description.trim())) {
+    if (!editingRecipe?.instructions?.some((inst) => inst.trim())) {
       newErrors.instructions = "Phải có ít nhất một bước hướng dẫn"
     }
 
@@ -85,39 +351,160 @@ export function RecipeEditModalImproved({ recipe, isOpen, onClose, onSave, ingre
     return Object.keys(newErrors).length === 0
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!editingRecipe) return
 
     if (!validateForm()) {
+      toast.error("Vui lòng kiểm tra lại thông tin")
       return
     }
 
-    // Convert detailed instructions back to simple strings for compatibility
-    const simpleInstructions = detailedInstructions
-      .filter((inst) => inst.description.trim())
-      .map((inst) => inst.description)
+    try {
+      setIsSaving(true)
 
-    // Lọc bỏ các nguyên liệu trống
-    const cleanedRecipe = {
-      ...editingRecipe,
-      ingredients: editingRecipe.ingredients?.filter((ing) => ing.trim()) || [],
-      instructions: simpleInstructions,
+      // Prepare update data
+      const updateData: RecipeUpdateRequest = {
+        title: editingRecipe.name || "",
+        description: editingRecipe.description || "",
+        difficulty: editingRecipe.difficulty || "Easy",
+        cookingTime: editingRecipe.cookingTime || "",
+        subCategoryId: editingRecipe.subcategoryId || "",
+      }
+
+      // Update recipe basic info
+      await updateRecipe(editingRecipe.id, updateData, imageFile as File)
+
+      // Update status nếu có thay đổi
+      if (recipe && editingRecipe.status !== recipe.status) {
+        try {
+          if (editingRecipe.status === "APPROVED") {
+            await changeRecipeStatus(editingRecipe.id)
+            toast.success("Đã cập nhật trạng thái thành 'Đã duyệt'")
+          } else if (editingRecipe.status === "NOT_APPROVED") {
+            await changeRecipeStatusToNotApproved(editingRecipe.id)
+            toast.success("Đã cập nhật trạng thái thành 'Từ chối'")
+          }else if (editingRecipe.status === "PENDING") {
+            await changeStatusToPending(editingRecipe.id)
+            toast.success("Đã cập nhật trạng thái thành 'Đang chờ duyệt'")
+          }
+          // PENDING không cần API call đặc biệt
+        } catch (statusError) {
+          console.error("Error updating status:", statusError)
+          toast.warning("Cập nhật công thức thành công nhưng không thể thay đổi trạng thái")
+        }
+      }
+
+      // Update steps với ảnh
+      await updateRecipeStepsWithImages(editingRecipe.id, detailedInstructions)
+
+      toast.success("Cập nhật công thức thành công!")
+
+      // Clean up the recipe data and call onSave
+      const cleanedRecipe = {
+        ...editingRecipe,
+        ingredients: editingRecipe.ingredients?.filter((ing) => ing.trim()) || [],
+        instructions: editingRecipe.instructions?.filter((inst) => inst.trim()) || [],
+      }
+
+      onSave(cleanedRecipe)
+      onClose()
+    } catch (error) {
+      console.error("Error updating recipe:", error)
+      toast.error("Không thể cập nhật công thức")
+    } finally {
+      setIsSaving(false)
     }
+  }
 
-    onSave(cleanedRecipe)
-    onClose()
+  // Thêm hàm helper để xử lý ảnh
+  const preserveExistingImages = (instructions: DetailedInstruction[]) => {
+    return instructions.map((instruction) => {
+      // Nếu có imageFile mới, ưu tiên sử dụng
+      if (instruction.imageFile) {
+        return instruction
+      }
+
+      // Nếu có image URL từ server và không có imageFile, giữ nguyên
+      if (instruction.image && !instruction.image.startsWith("data:")) {
+        return {
+          ...instruction,
+          // Đánh dấu để không xóa ảnh này
+          preserveExistingImage: true,
+        }
+      }
+
+      return instruction
+    })
+  }
+
+  const updateRecipeStepsWithImages = async (recipeId: string, instructions: DetailedInstruction[]) => {
+    try {
+      const processedInstructions = preserveExistingImages(instructions)
+
+      // Lấy tất cả steps hiện tại
+      const currentSteps = [...recipeSteps].sort((a, b) => a.step - b.step)
+
+      // Xử lý từng instruction
+      for (let i = 0; i < processedInstructions.length; i++) {
+        const instruction = processedInstructions[i]
+        const stepNumber = i + 1
+        const existingStep = currentSteps.find((step) => step.step === stepNumber)
+
+        if (instruction.description.trim()) {
+          if (existingStep) {
+            // Update existing step
+            console.log(`Updating step ${stepNumber}`)
+
+            const updateData: RecipeStepsUpdateRequest = {
+              step: stepNumber,
+              description: instruction.description,
+              waitingTime: instruction.time || "",
+            }
+
+            // Chỉ gửi file nếu có ảnh mới
+            const imageToSend = instruction.imageFile || undefined
+            await updateRecipeStep(recipeId, stepNumber, updateData, imageToSend)
+          } else {
+            // Create new step
+            console.log(`Creating step ${stepNumber}`)
+
+            const createData: RecipeStepsCreationRequest = {
+              step: stepNumber,
+              description: instruction.description,
+              waitingTime: instruction.time || "",
+            }
+
+            const imageToSend = instruction.imageFile || undefined
+            await createRecipeStep(recipeId, createData, imageToSend)
+          }
+        }
+      }
+
+      // Xóa các steps thừa (nếu có)
+      const stepsToDelete = currentSteps.filter((step) => step.step > processedInstructions.length)
+      for (const step of stepsToDelete) {
+        console.log(`Deleting excess step ${step.step}`)
+        await deleteRecipeStep(step.id)
+      }
+    } catch (error) {
+      console.error("Error updating steps with images:", error)
+      throw error
+    }
   }
 
   const handleCancel = () => {
-    setEditingRecipe(null)
-    setDetailedInstructions([])
-    setErrors({})
+    resetModalState()
     onClose()
   }
 
   const updateEditingRecipe = (field: keyof Recipe, value: any) => {
     if (editingRecipe) {
-      setEditingRecipe((prev) => (prev ? { ...prev, [field]: value } : null))
+      setEditingRecipe((prev) => {
+        if (!prev) return null
+        const updated = { ...prev, [field]: value }
+        return updated
+      })
+
       // Xóa lỗi khi user bắt đầu sửa
       if (errors[field]) {
         setErrors((prev) => ({ ...prev, [field]: "" }))
@@ -125,63 +512,116 @@ export function RecipeEditModalImproved({ recipe, isOpen, onClose, onSave, ingre
     }
   }
 
-  const updateIngredient = (index: number, value: string) => {
-    if (editingRecipe && editingRecipe.ingredients) {
-      const newIngredients = [...editingRecipe.ingredients]
-      newIngredients[index] = value
-      updateEditingRecipe("ingredients", newIngredients)
+  const handleMainCategoryChange = (mainCategoryId: string) => {
+    setSelectedMainCategoryId(mainCategoryId)
+
+    // Only reset subcategory if user manually changes main category
+    if (mainCategoryId !== selectedMainCategoryId) {
+      updateEditingRecipe("subcategoryId", "")
+      updateEditingRecipe("category", "")
+    }
+
+    // Load subcategories for the selected main category
+    loadSubCategories(mainCategoryId)
+
+    // Clear error if exists
+    if (errors.subcategoryId) {
+      setErrors((prev) => ({ ...prev, subcategoryId: "" }))
     }
   }
 
-  const addIngredientFromSelect = (ingredientText: string) => {
-    if (editingRecipe) {
-      const newIngredients = [...(editingRecipe.ingredients || []), ingredientText]
-      updateEditingRecipe("ingredients", newIngredients)
+  const handleSubCategoryChange = (subCategoryId: string) => {
+    const selectedSubCategory = subCategories.find((sub) => sub.id === subCategoryId)
+    if (selectedSubCategory) {
+      updateEditingRecipe("subcategoryId", subCategoryId)
+      updateEditingRecipe("category", selectedSubCategory.subCategoryName)
+
+      console.log("Selected subcategory:", {
+        id: subCategoryId,
+        name: selectedSubCategory.subCategoryName,
+      })
     }
   }
 
-  const removeIngredient = (index: number) => {
-    if (editingRecipe && editingRecipe.ingredients && editingRecipe.ingredients.length > 1) {
-      const newIngredients = editingRecipe.ingredients.filter((_, i) => i !== index)
-      updateEditingRecipe("ingredients", newIngredients)
-    }
-  }
+  const addIngredientFromSelect = async (ingredientText: string) => {
+    try {
+      // Phân tích chuỗi ingredientText thành quantity, unit, và ingredientName
+      const parts = ingredientText.trim().split(" ")
+      const quantity = Number.parseFloat(parts[0]) || 1
+      const unit = parts[1] || ""
+      const ingredientName = parts.slice(2).join(" ")
 
-  const handleAddInstruction = () => {
-    setEditingInstructionIndex(null)
-    setIsInstructionModalOpen(true)
-  }
+      // Tìm ingredient trong allIngredients dựa trên ingredientName
+      const selectedIngredient = allIngredients.find(
+        (ing) => ing.ingredientName.toLowerCase() === ingredientName.toLowerCase(),
+      )
 
-  const handleEditInstruction = (index: number) => {
-    setEditingInstructionIndex(index)
-    setIsInstructionModalOpen(true)
-  }
-
-  const handleSaveInstruction = (instructionData: Omit<Instruction, "step">) => {
-    if (editingInstructionIndex !== null) {
-      // Edit existing instruction
-      const newInstructions = [...detailedInstructions]
-      newInstructions[editingInstructionIndex] = {
-        ...instructionData,
-        step: editingInstructionIndex + 1,
+      if (!selectedIngredient) {
+        toast.error("Không tìm thấy nguyên liệu trong danh sách")
+        return
       }
-      setDetailedInstructions(newInstructions)
-    } else {
-      // Add new instruction
-      const newInstruction: Instruction = {
-        ...instructionData,
-        step: detailedInstructions.length + 1,
+
+      // Gọi API để tạo mới recipe ingredient
+      const recipeIngredientData: RecipeIngredientsCreationRequest = {
+        recipeId: editingRecipe!.id,
+        ingredientId: selectedIngredient.id,
+        quantity: quantity,
       }
-      setDetailedInstructions([...detailedInstructions, newInstruction])
+
+      const newRecipeIngredient = await createRecipeIngredient(recipeIngredientData)
+
+      // Cập nhật recipeIngredients
+      setRecipeIngredients((prev) => [...prev, newRecipeIngredient])
+
+      // Cập nhật editingRecipe.ingredients
+      if (editingRecipe) {
+        const newIngredients = [...(editingRecipe.ingredients || []), ingredientText]
+        updateEditingRecipe("ingredients", newIngredients)
+      }
+
+      toast.success("Thêm nguyên liệu thành công!")
+    } catch (error) {
+      console.error("Error adding ingredient:", error)
+      toast.error("Không thể thêm nguyên liệu")
     }
   }
 
-  const removeInstruction = (index: number) => {
-    const newInstructions = detailedInstructions.filter((_, i) => i !== index)
-    // Re-number steps
-    const renumbered = newInstructions.map((inst, i) => ({ ...inst, step: i + 1 }))
-    setDetailedInstructions(renumbered)
+  const removeIngredientById = async (ingredientId: string, index: number) => {
+    try {
+      // Gọi API để xóa nguyên liệu trên server
+      await deleteRecipeIngredient(ingredientId)
+
+      // Xóa nguyên liệu khỏi state recipeIngredients
+      setRecipeIngredients((prev) => prev.filter((ing) => ing.id !== ingredientId))
+
+      // Xóa nguyên liệu khỏi editingRecipe.ingredients
+      if (editingRecipe && editingRecipe.ingredients) {
+        const newIngredients = editingRecipe.ingredients.filter((_, i) => i !== index)
+        updateEditingRecipe("ingredients", newIngredients)
+      }
+
+      toast.success("Xóa nguyên liệu thành công!")
+    } catch (error) {
+      console.error("Error deleting ingredient:", error)
+      toast.error("Không thể xóa nguyên liệu")
+    }
   }
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setImageFile(file)
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        if (e.target?.result) {
+          updateEditingRecipe("image", e.target.result as string)
+        }
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const memoizedDetailedInstructions = useMemo(() => detailedInstructions, [detailedInstructions])
 
   if (!editingRecipe) return null
 
@@ -193,11 +633,16 @@ export function RecipeEditModalImproved({ recipe, isOpen, onClose, onSave, ingre
             <DialogTitle className="flex items-center justify-between">
               <span>Chỉnh sửa công thức: {editingRecipe.name}</span>
               <div className="flex gap-2">
-                <Button size="sm" onClick={handleSave} className="bg-green-500 hover:bg-green-600">
-                  <Save className="w-4 h-4 mr-2" />
-                  Lưu
+                <Button
+                  size="sm"
+                  onClick={handleSave}
+                  className="bg-green-500 hover:bg-green-600"
+                  disabled={isSaving || isLoadingIngredients || isLoadingSteps}
+                >
+                  {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                  {isSaving ? "Đang lưu..." : "Lưu"}
                 </Button>
-                <Button size="sm" variant="outline" onClick={handleCancel}>
+                <Button size="sm" variant="outline" onClick={handleCancel} disabled={isSaving}>
                   <X className="w-4 h-4 mr-2" />
                   Hủy
                 </Button>
@@ -207,219 +652,398 @@ export function RecipeEditModalImproved({ recipe, isOpen, onClose, onSave, ingre
 
           <div className="space-y-6">
             {/* Recipe Image and Basic Info */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="md:col-span-1">
-                <Image
-                  src={editingRecipe.image || "/placeholder.svg"}
-                  alt={editingRecipe.name || "Recipe"}
-                  width={300}
-                  height={300}
-                  className="w-full h-64 object-cover rounded-lg"
-                />
-                <div className="mt-2">
-                  <Label className="text-sm font-medium">URL ảnh</Label>
-                  <Input
-                    value={editingRecipe.image || ""}
-                    onChange={(e) => updateEditingRecipe("image", e.target.value)}
-                    placeholder="https://example.com/image.jpg"
-                    className="mt-1"
-                  />
-                </div>
-              </div>
-
-              <div className="md:col-span-2 space-y-4">
-                <div>
-                  <Label className="text-sm font-medium">
-                    Tên công thức <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    value={editingRecipe.name || ""}
-                    onChange={(e) => updateEditingRecipe("name", e.target.value)}
-                    className={`mt-1 ${errors.name ? "border-red-500" : ""}`}
-                    placeholder="Nhập tên công thức"
-                  />
-                  {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label className="text-sm font-medium">
-                      Danh mục <span className="text-red-500">*</span>
-                    </Label>
-                    <Select
-                      value={editingRecipe.category || ""}
-                      onValueChange={(value) => updateEditingRecipe("category", value)}
-                    >
-                      <SelectTrigger className={`mt-1 ${errors.category ? "border-red-500" : ""}`}>
-                        <SelectValue placeholder="Chọn danh mục" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CATEGORIES.map((category) => (
-                          <SelectItem key={category} value={category}>
-                            {category}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {errors.category && <p className="text-red-500 text-sm mt-1">{errors.category}</p>}
-                  </div>
-                  <div>
-                    <Label className="text-sm font-medium">Tác giả</Label>
-                    <Input value={editingRecipe.author || ""} disabled className="mt-1 bg-gray-100" />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label className="text-sm font-medium">Thời gian nấu</Label>
-                    <Input
-                      value={editingRecipe.cookingTime || ""}
-                      onChange={(e) => updateEditingRecipe("cookingTime", e.target.value)}
-                      className="mt-1"
-                      placeholder="VD: 30 phút"
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <ChefHat className="w-5 h-5 mr-2 text-orange-500" />
+                  Thông tin cơ bản
+                  {isLoadingCategories && <Loader2 className="w-4 h-4 ml-2 animate-spin" />}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="md:col-span-1">
+                    <Image
+                      src={editingRecipe.image || "/placeholder.svg"}
+                      alt={editingRecipe.name || "Recipe"}
+                      width={300}
+                      height={300}
+                      className="w-full h-64 object-cover rounded-lg"
                     />
+                    <div className="mt-2 space-y-2">
+                      <Label className="text-sm font-medium">Upload ảnh mới</Label>
+                      <Input type="file" accept="image/*" onChange={handleImageChange} className="mt-1" />
+                    </div>
                   </div>
-                  <div>
-                    <Label className="text-sm font-medium">Khẩu phần</Label>
-                    <Input
-                      type="number"
-                      min="1"
-                      value={editingRecipe.servings || ""}
-                      onChange={(e) => updateEditingRecipe("servings", Number.parseInt(e.target.value) || 0)}
-                      className="mt-1"
-                      placeholder="Số người ăn"
-                    />
-                  </div>
-                </div>
 
-                <div>
-                  <Label className="text-sm font-medium">
-                    Mô tả <span className="text-red-500">*</span>
-                  </Label>
-                  <Textarea
-                    value={editingRecipe.description || ""}
-                    onChange={(e) => updateEditingRecipe("description", e.target.value)}
-                    className={`mt-1 ${errors.description ? "border-red-500" : ""}`}
-                    rows={3}
-                    placeholder="Mô tả ngắn về công thức"
-                  />
-                  {errors.description && <p className="text-red-500 text-sm mt-1">{errors.description}</p>}
+                  <div className="md:col-span-2 space-y-4">
+                    <div>
+                      <Label className="text-sm font-medium">
+                        Tên công thức <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        value={editingRecipe.name || ""}
+                        onChange={(e) => updateEditingRecipe("name", e.target.value)}
+                        className={`mt-1 ${errors.name ? "border-red-500" : ""}`}
+                        placeholder="Nhập tên công thức"
+                      />
+                      {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
+                    </div>
+
+                    {/* Category Selection */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-sm font-medium">
+                          Danh mục chính <span className="text-red-500">*</span>
+                        </Label>
+                        <Select
+                          value={selectedMainCategoryId}
+                          onValueChange={handleMainCategoryChange}
+                          disabled={isLoadingCategories}
+                        >
+                          <SelectTrigger className="mt-1">
+                            <SelectValue
+                              placeholder={
+                                isLoadingCategories
+                                  ? "Đang tải..."
+                                  : selectedMainCategoryId
+                                    ? categories.find((c) => c.id === selectedMainCategoryId)?.name ||
+                                      "Chọn danh mục chính"
+                                    : "Chọn danh mục chính"
+                              }
+                            />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {categories.map((category) => (
+                              <SelectItem key={category.id} value={category.id}>
+                                {category.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {selectedMainCategoryId && (
+                          <p className="text-xs text-green-600 mt-1">
+                            ✓ Hiện tại: {categories.find((c) => c.id === selectedMainCategoryId)?.name}
+                          </p>
+                        )}
+                      </div>
+
+                      <div>
+                        <Label className="text-sm font-medium">
+                          Danh mục con <span className="text-red-500">*</span>
+                        </Label>
+                        <Select
+                          value={editingRecipe.subcategoryId || ""}
+                          onValueChange={handleSubCategoryChange}
+                          disabled={!selectedMainCategoryId || subCategories.length === 0}
+                        >
+                          <SelectTrigger className={`mt-1 ${errors.subcategoryId ? "border-red-500" : ""}`}>
+                            <SelectValue
+                              placeholder={
+                                !selectedMainCategoryId
+                                  ? "Chọn danh mục chính trước"
+                                  : subCategories.length === 0
+                                    ? "Không có danh mục con"
+                                    : editingRecipe.subcategoryId
+                                      ? subCategories.find((s) => s.id === editingRecipe.subcategoryId)
+                                          ?.subCategoryName || "Chọn danh mục con"
+                                      : "Chọn danh mục con"
+                              }
+                            />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {subCategories.map((subCategory) => (
+                              <SelectItem key={subCategory.id} value={subCategory.id}>
+                                {subCategory.subCategoryName}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {errors.subcategoryId && <p className="text-red-500 text-sm mt-1">{errors.subcategoryId}</p>}
+                        {editingRecipe.subcategoryId && (
+                          <p className="text-xs text-green-600 mt-1">
+                            ✓ Hiện tại:{" "}
+                            {subCategories.find((s) => s.id === editingRecipe.subcategoryId)?.subCategoryName}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-sm font-medium">Độ khó</Label>
+                        <Select
+                          value={editingRecipe.difficulty || ""}
+                          onValueChange={(value) => updateEditingRecipe("difficulty", value)}
+                        >
+                          <SelectTrigger className="mt-1">
+                            <SelectValue placeholder="Chọn độ khó" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Easy">Dễ</SelectItem>
+                            <SelectItem value="Medium">Trung bình</SelectItem>
+                            <SelectItem value="Hard">Khó</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium">Tác giả</Label>
+                        <Input value={editingRecipe.author || ""} disabled className="mt-1 bg-gray-100" />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-sm font-medium">Thời gian nấu</Label>
+                        <Input
+                          value={editingRecipe.cookingTime || ""}
+                          onChange={(e) => updateEditingRecipe("cookingTime", e.target.value)}
+                          className="mt-1"
+                          placeholder="VD: 30 phút"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium">Trạng thái công thức</Label>
+                        <div className="mt-1 space-y-2">
+                          <Select
+                            value={editingRecipe.status || ""}
+                            onValueChange={(value) => updateEditingRecipe("status", value)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Chọn trạng thái" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="PENDING">
+                                <div className="flex items-center gap-2">
+                                  <Badge className="bg-yellow-500 text-white text-xs">Chờ duyệt</Badge>
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="APPROVED">
+                                <div className="flex items-center gap-2">
+                                  <Badge className="bg-green-500 text-white text-xs">Đã duyệt</Badge>
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="NOT_APPROVED">
+                                <div className="flex items-center gap-2">
+                                  <Badge className="bg-red-500 text-white text-xs">Từ chối</Badge>
+                                </div>
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+
+                          {/* Hiển thị trạng thái hiện tại */}
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-600">Hiện tại:</span>
+                            {editingRecipe.status === "APPROVED" && (
+                              <Badge className="bg-green-500 text-white text-xs">Đã duyệt</Badge>
+                            )}
+                            {editingRecipe.status === "NOT_APPROVED" && (
+                              <Badge className="bg-red-500 text-white text-xs">Từ chối</Badge>
+                            )}
+                            {editingRecipe.status === "PENDING" && (
+                              <Badge className="bg-yellow-500 text-white text-xs">Chờ duyệt</Badge>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <Label className="text-sm font-medium">
+                        Mô tả <span className="text-red-500">*</span>
+                      </Label>
+                      <Textarea
+                        value={editingRecipe.description || ""}
+                        onChange={(e) => updateEditingRecipe("description", e.target.value)}
+                        className={`mt-1 ${errors.description ? "border-red-500" : ""}`}
+                        rows={3}
+                        placeholder="Mô tả ngắn về công thức"
+                      />
+                      {errors.description && <p className="text-red-500 text-sm mt-1">{errors.description}</p>}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
 
             <Separator />
 
             {/* Ingredients */}
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <div>
+            <Card>
+              <CardHeader>
+                <CardTitle>
                   <h3 className="text-lg font-semibold">
                     Nguyên liệu <span className="text-red-500">*</span>
+                    {isLoadingIngredients && <Loader2 className="w-4 h-4 ml-2 animate-spin inline" />}
+                    {isLoadingAllIngredients && <Loader2 className="w-4 h-4 ml-2 animate-spin inline" />}
                   </h3>
                   {errors.ingredients && <p className="text-red-500 text-sm">{errors.ingredients}</p>}
-                </div>
-                <Button
-                  size="sm"
-                  onClick={() => setIsIngredientSelectOpen(true)}
-                  className="bg-blue-500 hover:bg-blue-600"
-                >
-                  <Search className="w-4 h-4 mr-2" />
-                  Chọn nguyên liệu
-                </Button>
-              </div>
-              <div className="space-y-2">
-                {editingRecipe.ingredients?.map((ingredient, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                    <span className="text-sm text-gray-500 w-8">{index + 1}.</span>
-                    <Input
-                      value={ingredient}
-                      onChange={(e) => updateIngredient(index, e.target.value)}
-                      className="flex-1"
-                      placeholder="VD: 500g thịt heo"
-                    />
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {/* Button to select ingredients */}
+                  <div className="flex justify-start">
                     <Button
                       size="sm"
-                      variant="outline"
-                      onClick={() => removeIngredient(index)}
-                      className="text-red-600 hover:bg-red-50"
-                      disabled={editingRecipe.ingredients?.length === 1}
+                      onClick={() => setIsIngredientSelectOpen(true)}
+                      className="bg-blue-500 hover:bg-blue-600"
+                      disabled={isLoadingIngredients || isLoadingAllIngredients}
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Search className="w-4 h-4 mr-2" />
+                      {isLoadingAllIngredients ? "Đang tải..." : "Chọn nguyên liệu"}
                     </Button>
                   </div>
-                ))}
-              </div>
-            </div>
+
+                  {recipeIngredients && recipeIngredients.length > 0 ? (
+                    <>
+                      {/* Header */}
+                      <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-gray-50 rounded-lg font-medium text-gray-700">
+                        <div className="col-span-1">#</div>
+                        <div className="col-span-6">Tên nguyên liệu</div>
+                        <div className="col-span-2">Số lượng</div>
+                        <div className="col-span-2">Đơn vị</div>
+                        <div className="col-span-1">Xóa</div>
+                      </div>
+
+                      {/* Ingredient List - Sử dụng trực tiếp từ API */}
+                      <div className="space-y-2">
+                        {recipeIngredients.map((ingredient, index) => (
+                          <div
+                            key={ingredient.id}
+                            className="grid grid-cols-12 gap-4 items-center px-4 py-3 border rounded-lg hover:bg-gray-50"
+                          >
+                            <div className="col-span-1">
+                              <span className="text-sm font-medium text-gray-600">{index + 1}</span>
+                            </div>
+                            <div className="col-span-6">
+                              <div className="p-2 bg-gray-100 rounded border">
+                                <span className="text-gray-800 font-medium">{ingredient.ingredientName}</span>
+                              </div>
+                            </div>
+                            <div className="col-span-2">
+                              <div className="p-2 bg-gray-100 rounded border text-center">
+                                <span className="text-gray-800 font-medium">{ingredient.quantity || "-"}</span>
+                              </div>
+                            </div>
+                            <div className="col-span-2">
+                              <div className="p-2 bg-gray-100 rounded border text-center">
+                                <span className="text-gray-800 font-medium">{ingredient.unit || "-"}</span>
+                              </div>
+                            </div>
+                            <div className="col-span-1">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeIngredientById(ingredient.id, index)}
+                                className="text-red-600 hover:text-red-800 hover:bg-red-50 p-1"
+                                disabled={recipeIngredients.length === 1 || isLoadingIngredients}
+                              >
+                                <X className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-lg">
+                      <div className="text-4xl mb-4">🥗</div>
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">
+                        {isLoadingIngredients ? "Đang tải nguyên liệu..." : "Chưa có nguyên liệu nào"}
+                      </h3>
+                      <p className="text-gray-600 mb-4">Nhấn "Chọn nguyên liệu" để thêm nguyên liệu cho công thức</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
 
             <Separator />
 
-            {/* Instructions */}
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-lg font-semibold">
-                    Cách làm <span className="text-red-500">*</span>
-                  </h3>
-                  {errors.instructions && <p className="text-red-500 text-sm">{errors.instructions}</p>}
-                </div>
-                <Button size="sm" onClick={handleAddInstruction} className="bg-orange-500 hover:bg-orange-600">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Thêm bước
-                </Button>
-              </div>
-              <div className="space-y-4">
-                {detailedInstructions.map((instruction, index) => (
-                  <div key={index} className="border rounded-lg p-4 bg-gray-50">
-                    <div className="flex items-start gap-4">
-                      <div className="flex-shrink-0 w-8 h-8 bg-orange-500 text-white rounded-full flex items-center justify-center font-semibold">
-                        {instruction.step}
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <h4 className="font-medium">Bước {instruction.step}</h4>
-                          {instruction.time && (
-                            <div className="flex items-center gap-1 text-sm text-gray-600">
-                              <Clock className="w-3 h-3" />
-                              <span>{instruction.time}</span>
-                            </div>
-                          )}
-                        </div>
-                        <p className="text-gray-700 mb-2">{instruction.description}</p>
-                        {instruction.image && (
-                          <Image
-                            src={instruction.image || "/placeholder.svg"}
-                            alt={`Bước ${instruction.step}`}
-                            width={150}
-                            height={100}
-                            className="rounded object-cover"
-                          />
-                        )}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleEditInstruction(index)}
-                          className="text-blue-600 hover:bg-blue-50"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => removeInstruction(index)}
-                          className="text-red-600 hover:bg-red-50"
-                          disabled={detailedInstructions.length === 1}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
+            {/* Instructions - Hiển thị với ảnh */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold">
+                      Cách làm <span className="text-red-500">*</span>
+                      {isLoadingSteps && <Loader2 className="w-4 h-4 ml-2 animate-spin inline" />}
+                    </h3>
+                    {errors.instructions && <p className="text-red-500 text-sm">{errors.instructions}</p>}
                   </div>
-                ))}
-              </div>
-            </div>
+                  <Button
+                    size="sm"
+                    onClick={() => setIsInstructionModalOpen(true)}
+                    className="bg-orange-500 hover:bg-orange-600"
+                    disabled={isLoadingSteps}
+                  >
+                    <Edit className="w-4 h-4 mr-2" />
+                    Chỉnh sửa
+                  </Button>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {detailedInstructions && detailedInstructions.length > 0 ? (
+                    <div className="space-y-4">
+                      {detailedInstructions.map((instruction, index) => (
+                        <div key={index} className="border rounded-lg p-4 bg-gray-50">
+                          <div className="flex items-start gap-4">
+                            <div className="flex-shrink-0 w-8 h-8 bg-orange-500 text-white rounded-full flex items-center justify-center font-semibold">
+                              {index + 1}
+                            </div>
+                            <div className="flex-1">
+                              <h4 className="font-medium mb-2">Bước {index + 1}</h4>
+                              <p className="text-gray-700 mb-2">{instruction.description}</p>
+
+                              {/* Hiển thị thời gian nếu có */}
+                              {instruction.time && (
+                                <div className="flex items-center gap-1 text-sm text-gray-600 mb-2">
+                                  <Clock className="w-3 h-3" />
+                                  <span>{instruction.time}</span>
+                                </div>
+                              )}
+
+                              {/* Hiển thị ảnh nếu có */}
+                              {instruction.image && (
+                                <div className="mt-2">
+                                  <Image
+                                    src={instruction.image || "/placeholder.svg"}
+                                    alt={`Bước ${index + 1}`}
+                                    width={200}
+                                    height={150}
+                                    className="rounded-lg object-cover border"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-lg">
+                      <div className="text-4xl mb-4">📝</div>
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">
+                        {isLoadingSteps ? "Đang tải hướng dẫn..." : "Chưa có hướng dẫn nào"}
+                      </h3>
+                      <p className="text-gray-600 mb-4">Nhấn "Chỉnh sửa" để thêm hướng dẫn cho công thức</p>
+                      <Button
+                        type="button"
+                        onClick={() => setIsInstructionModalOpen(true)}
+                        className="bg-orange-500 hover:bg-orange-600"
+                        disabled={isLoadingSteps}
+                      >
+                        <Edit className="w-4 h-4 mr-2" />
+                        Thêm hướng dẫn đầu tiên
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </DialogContent>
       </Dialog>
@@ -429,18 +1053,30 @@ export function RecipeEditModalImproved({ recipe, isOpen, onClose, onSave, ingre
         isOpen={isIngredientSelectOpen}
         onClose={() => setIsIngredientSelectOpen(false)}
         onSelect={addIngredientFromSelect}
-        ingredients={ingredients}
+        ingredients={allIngredients}
       />
 
-      {/* Instruction Add Modal */}
-      <InstructionAddModal
+      {/* Instruction Modal - Truyền detailed instructions */}
+      <InstructionModal
         isOpen={isInstructionModalOpen}
         onClose={() => setIsInstructionModalOpen(false)}
-        onSave={handleSaveInstruction}
-        stepNumber={editingInstructionIndex !== null ? editingInstructionIndex + 1 : detailedInstructions.length + 1}
-        editingInstruction={
-          editingInstructionIndex !== null ? detailedInstructions[editingInstructionIndex] : undefined
-        }
+        detailedInstructions={memoizedDetailedInstructions}
+        onSave={(instructions) => {
+          console.log("Saving detailed instructions from modal:", instructions)
+          setDetailedInstructions(instructions)
+
+          // Cập nhật editingRecipe.instructions để tương thích
+          const simpleInstructions = instructions.map((inst) => inst.description)
+          updateEditingRecipe("instructions", simpleInstructions)
+
+          // Clear validation error if exists
+          if (errors.instructions) {
+            setErrors((prev) => ({ ...prev, instructions: "" }))
+          }
+
+          // Close modal after saving
+          setIsInstructionModalOpen(false)
+        }}
       />
     </>
   )

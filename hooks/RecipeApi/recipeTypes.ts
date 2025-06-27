@@ -26,7 +26,7 @@ export interface RecipeResponse {
   id: string
   title: string
   description: string
-  img?: string
+  image?: string
   cookingTime: string
   difficulty: string
   totalLikes: number
@@ -90,6 +90,8 @@ export interface RecipeIngredientsResponse {
   id: string
   recipeName: string
   ingredientName: string
+  unit: string
+  ingredientId: string
   quantity: number
 }
 
@@ -111,7 +113,7 @@ export interface RecipeSteps {
   recipe: Recipe
   description: string
   waitingTime?: string
-  recipeStepsImg?: string
+  recipeStepImage?: string
 }
 
 export interface RecipeStepsResponse {
@@ -120,7 +122,7 @@ export interface RecipeStepsResponse {
   recipeName: string
   description: string
   waitingTime?: string
-  recipeStepsImg?: string
+  recipeStepImage?: string
 }
 
 export interface RecipeStepsCreationRequest {

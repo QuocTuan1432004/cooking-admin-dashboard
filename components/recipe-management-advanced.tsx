@@ -3,16 +3,13 @@
 import { useState, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Plus, Carrot } from "lucide-react"
+import { Plus, Carrot, Edit, Trash2 } from "lucide-react"
 import type { Recipe } from "./recipe-detail-modal"
 import { RecipeTableEnhanced } from "./recipe-table-enhanced"
 import { RecipeDetailModal } from "./recipe-detail-modal"
-import { RecipeFilters } from "./recipe-filters"
 import { RecipeEditModalImproved } from "./recipe-edit-modal-improved"
-import { RecipeStatsCards } from "./recipe-stats-cards"
-import { RecipeBulkActions } from "./recipe-bulk-actions"
 import { RecipePagination } from "./recipe-pagination"
-import { type Ingredient } from "@/hooks/RecipeApi/recipeTypes"
+import type { Ingredient } from "@/hooks/RecipeApi/recipeTypes"
 import { IngredientAddModal } from "./ingredient-add-modal"
 
 interface RecipeManagementAdvancedProps {
@@ -24,6 +21,14 @@ interface RecipeManagementAdvancedProps {
   showBulkActions?: boolean
   title?: string
   onAddRecipe?: () => void
+  onEditIngredients?: () => void
+  onDeleteIngredients?: () => void
+  currentPage?: number
+  totalPages?: number
+  onPageChange?: (page: number) => void
+  onApproveRecipe?: (recipeId: string) => void // ← Separate approve
+  onRejectRecipe?: (recipeId: string, reason: string) => void // ← Separate reject
+  onDeleteRecipe?: (recipeId: string) => void
 }
 
 export function RecipeManagementAdvanced({
@@ -35,67 +40,45 @@ export function RecipeManagementAdvanced({
   showBulkActions = false,
   title = "Danh sách công thức",
   onAddRecipe,
+  onEditIngredients,
+  onDeleteIngredients,
+  currentPage: propCurrentPage,
+  totalPages: propTotalPages,
+  onPageChange: propOnPageChange,
+  onApproveRecipe: propOnApproveRecipe, // ← New prop
+  onRejectRecipe: propOnRejectRecipe, // ← New prop
+  onDeleteRecipe: propOnDeleteRecipe,
 }: RecipeManagementAdvancedProps) {
-  // Filter states
-  const [searchTerm, setSearchTerm] = useState("")
-  const [selectedCategory, setSelectedCategory] = useState("all")
-  const [selectedStatus, setSelectedStatus] = useState("all")
-  const [selectedDate, setSelectedDate] = useState("")
-
   // Modal states
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isIngredientModalOpen, setIsIngredientModalOpen] = useState(false)
 
-  // Bulk actions
-  const [selectedIds, setSelectedIds] = useState<number[]>([])
-
-  // Pagination
-  const [currentPage, setCurrentPage] = useState(1)
+  // Local pagination (chỉ sử dụng khi không có API pagination)
+  const [localCurrentPage, setLocalCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
 
+  // Sử dụng API pagination nếu có, ngược lại dùng local pagination
+  const currentPage = propCurrentPage !== undefined ? propCurrentPage + 1 : localCurrentPage // API pagination bắt đầu từ 0
+  const totalPages = propTotalPages || Math.ceil(recipes.length / pageSize)
+  const onPageChange = propOnPageChange
+    ? (page: number) => propOnPageChange(page - 1) // Convert về 0-based cho API
+    : setLocalCurrentPage
+
   // Ingredients state
-  const [ingredients, setIngredients] = useState<Ingredient[]>([
-    // { id: 1, name: "Thịt heo", calories: 250 },
-    // { id: 2, name: "Cà chua", calories: 18 },
-    // { id: 3, name: "Hành tây", calories: 40 },
-    // { id: 4, name: "Gạo tẻ", calories: 365 },
-    // { id: 5, name: "Dầu ăn", calories: 884 },
-    // { id: 6, name: "Gà ta", calories: 239 },
-    // { id: 7, name: "Gừng tươi", calories: 80 },
-    // { id: 8, name: "Nước mắm", calories: 10 },
-    // { id: 9, name: "Đường trắng", calories: 387 },
-    // { id: 10, name: "Tiêu đen", calories: 251 },
-  ])
+  const [ingredients, setIngredients] = useState<Ingredient[]>([])
 
-  // Filter recipes
-  const filteredRecipes = useMemo(() => {
-    return recipes.filter((recipe) => {
-      const matchesSearch =
-        recipe.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        recipe.author.toLowerCase().includes(searchTerm.toLowerCase())
-      const matchesCategory = selectedCategory === "all" || recipe.category === selectedCategory
-      const matchesStatus = selectedStatus === "all" || recipe.status === selectedStatus
-      const matchesDate = !selectedDate || recipe.date.includes(selectedDate)
-
-      return matchesSearch && matchesCategory && matchesStatus && matchesDate
-    })
-  }, [recipes, searchTerm, selectedCategory, selectedStatus, selectedDate])
-
-  // Paginate recipes
+  // Paginate recipes (chỉ khi không có API pagination)
   const paginatedRecipes = useMemo(() => {
-    const startIndex = (currentPage - 1) * pageSize
-    return filteredRecipes.slice(startIndex, startIndex + pageSize)
-  }, [filteredRecipes, currentPage, pageSize])
+    if (propCurrentPage !== undefined) {
+      // Nếu có API pagination, return recipes as is
+      return recipes
+    }
 
-  const totalPages = Math.ceil(filteredRecipes.length / pageSize)
-
-  // Reset pagination when filters change
-  const handleFilterChange = () => {
-    setCurrentPage(1)
-    setSelectedIds([])
-  }
+    const startIndex = (localCurrentPage - 1) * pageSize
+    return recipes.slice(startIndex, startIndex + pageSize)
+  }, [recipes, localCurrentPage, pageSize, propCurrentPage])
 
   const handleViewRecipe = (recipe: Recipe) => {
     setSelectedRecipe(recipe)
@@ -112,65 +95,53 @@ export function RecipeManagementAdvanced({
     onRecipeUpdate(updatedRecipes)
   }
 
-  const handleDeleteRecipe = (recipeId: number) => {
-    const updatedRecipes = recipes.filter((recipe) => recipe.id !== recipeId)
-    onRecipeUpdate(updatedRecipes)
-    setSelectedIds(selectedIds.filter((id) => id !== recipeId))
-  }
-
-  const handleApproveRecipe = (recipeId: number) => {
-    const updatedRecipes = recipes.map((recipe) =>
-      recipe.id === recipeId ? { ...recipe, status: "approved" as const } : recipe,
-    )
-    onRecipeUpdate(updatedRecipes)
-  }
-
-  const handleRejectRecipe = (recipeId: number, reason: string) => {
-    const updatedRecipes = recipes.map((recipe) =>
-      recipe.id === recipeId ? { ...recipe, status: "rejected" as const } : recipe,
-    )
-    onRecipeUpdate(updatedRecipes)
-  }
-
-  const handleBulkAction = (action: string, ids: number[]) => {
-    let updatedRecipes = [...recipes]
-
-    switch (action) {
-      case "delete":
-        updatedRecipes = recipes.filter((recipe) => !ids.includes(recipe.id))
-        break
-      case "approve":
-        updatedRecipes = recipes.map((recipe) =>
-          ids.includes(recipe.id) ? { ...recipe, status: "approved" as const } : recipe,
-        )
-        break
-      case "reject":
-        updatedRecipes = recipes.map((recipe) =>
-          ids.includes(recipe.id) ? { ...recipe, status: "rejected" as const } : recipe,
-        )
-        break
+  const handleDeleteRecipe = (recipeId: string) => {
+    // Thay đổi từ number thành string
+    if (propOnDeleteRecipe) {
+      // Sử dụng API delete
+      propOnDeleteRecipe(recipeId)
+    } else {
+      // Local delete
+      const updatedRecipes = recipes.filter((recipe) => recipe.id !== recipeId)
+      onRecipeUpdate(updatedRecipes)
     }
+  }
 
-    onRecipeUpdate(updatedRecipes)
+  // Update the handlers to use the new props
+  const handleApproveRecipe = (recipeId: string) => {
+    if (propOnApproveRecipe) {
+      propOnApproveRecipe(recipeId)
+    } else {
+      // Local fallback
+      const updatedRecipes = recipes.map((recipe) =>
+        recipe.id === recipeId ? { ...recipe, status: "APPROVED" } : recipe,
+      )
+      onRecipeUpdate(updatedRecipes)
+    }
+  }
+
+  const handleRejectRecipe = (recipeId: string, reason: string) => {
+    if (propOnRejectRecipe) {
+      propOnRejectRecipe(recipeId, reason)
+    } else {
+      // Local fallback
+      const updatedRecipes = recipes.map((recipe) =>
+        recipe.id === recipeId ? { ...recipe, status: "NOT_APPROVED" } : recipe,
+      )
+      onRecipeUpdate(updatedRecipes)
+    }
   }
 
   const handleAddIngredient = (newIngredient: Omit<Ingredient, "id">) => {
     const ingredient: Ingredient = {
       ...newIngredient,
-      id: Math.max(...ingredients.map((i) => i.id), 0) + 1,
+      id: (Math.max(...ingredients.map((i) => Number(i.id) || 0), 0) + 1).toString(),
     }
     setIngredients([...ingredients, ingredient])
-    console.log("Đã thêm nguyên liệu:", ingredient)
-  }
-
-  const getUniqueCategories = () => {
-    return [...new Set(recipes.map((recipe) => recipe.category))]
   }
 
   return (
     <>
-      {showStats && <RecipeStatsCards recipes={recipes} />}
-
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
@@ -186,53 +157,44 @@ export function RecipeManagementAdvanced({
                 <Carrot className="w-4 h-4 mr-2" />
                 Thêm nguyên liệu
               </Button>
+              {onEditIngredients && (
+                <Button className="bg-blue-500 hover:bg-blue-600" onClick={onEditIngredients}>
+                  <Edit className="w-4 h-4 mr-2" />
+                  Chỉnh sửa nguyên liệu
+                </Button>
+              )}
+              {onDeleteIngredients && (
+                <Button className="bg-red-500 hover:bg-red-600" onClick={onDeleteIngredients}>
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Xóa nguyên liệu
+                </Button>
+              )}
             </div>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {showFilters && (
-            <div onChange={handleFilterChange}>
-              <RecipeFilters
-                searchTerm={searchTerm}
-                onSearchChange={setSearchTerm}
-                selectedCategory={selectedCategory}
-                onCategoryChange={setSelectedCategory}
-                selectedStatus={selectedStatus}
-                onStatusChange={setSelectedStatus}
-                selectedDate={selectedDate}
-                onDateChange={setSelectedDate}
-                categories={getUniqueCategories()}
-              />
-            </div>
-          )}
-
-          {showBulkActions && (
-            <RecipeBulkActions
-              recipes={paginatedRecipes}
-              selectedIds={selectedIds}
-              onSelectionChange={setSelectedIds}
-              onBulkAction={handleBulkAction}
-            />
-          )}
-
           <RecipeTableEnhanced
             recipes={paginatedRecipes}
             onView={handleViewRecipe}
             onEdit={handleEditRecipe}
             onDelete={handleDeleteRecipe}
-            selectedIds={showBulkActions ? selectedIds : undefined}
-            onSelectionChange={showBulkActions ? setSelectedIds : undefined}
+            selectedIds={undefined} // Loại bỏ bulk selection
+            onSelectionChange={undefined} // Loại bỏ bulk selection
           />
 
           <RecipePagination
             currentPage={currentPage}
             totalPages={totalPages}
             pageSize={pageSize}
-            totalItems={filteredRecipes.length}
-            onPageChange={setCurrentPage}
+            totalItems={propCurrentPage !== undefined ? recipes.length : recipes.length}
+            onPageChange={onPageChange}
             onPageSizeChange={(size) => {
               setPageSize(size)
-              setCurrentPage(1)
+              if (propOnPageChange) {
+                propOnPageChange(0) // Reset về page 0 cho API
+              } else {
+                setLocalCurrentPage(1)
+              }
             }}
           />
         </CardContent>
@@ -259,7 +221,6 @@ export function RecipeManagementAdvanced({
           setSelectedRecipe(null)
         }}
         onSave={handleSaveRecipe}
-        ingredients={ingredients}
       />
 
       <IngredientAddModal

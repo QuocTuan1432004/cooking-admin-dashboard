@@ -50,7 +50,7 @@ const formData = new FormData()
 }
 
 export const getAllRecipe = async (page: number, size: number): Promise<ApiResponse<PageResponse<RecipeResponse>>> => {
-  const response = await authenticatedFetch(`${API_BASE_URL}/recipes?page=${page}&size=${size}`)
+  const response = await authenticatedFetch(`${API_BASE_URL}/recipe/getAll?page=${page}&size=${size}`)
 
   const result: ApiResponse<PageResponse<RecipeResponse>> = await handleResponse(response)
   return result
@@ -72,6 +72,24 @@ export const findRecipesByKeyword = async (keyword: string): Promise<RecipeRespo
 
 export const changeRecipeStatus = async (id: string): Promise<RecipeResponse> => {
   const response = await authenticatedFetch(`${API_BASE_URL}/recipe/changeStatus/${id}`, {
+    method: "POST",
+  })
+
+  const result: ApiResponse<RecipeResponse> = await handleResponse(response)
+  return result.result
+}
+
+export const changeStatusToPending = async (id: string): Promise<RecipeResponse> => {
+  const response = await authenticatedFetch(`${API_BASE_URL}/recipe/changeStatusToPending/${id}`, {
+    method: "POST",
+  })
+
+  const result: ApiResponse<RecipeResponse> = await handleResponse(response)
+  return result.result
+}
+
+export const changeRecipeStatusToNotApproved = async (id: string): Promise<RecipeResponse> => {
+  const response = await authenticatedFetch(`${API_BASE_URL}/recipe/changeStatusToNotApproved/${id}`, {
     method: "POST",
   })
 
