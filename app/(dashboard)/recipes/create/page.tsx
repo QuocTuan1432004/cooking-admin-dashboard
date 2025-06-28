@@ -35,7 +35,7 @@ interface Recipe {
   difficulty: "Easy" | "Medium" | "Hard" | ""
   parentCategory: string
   subCategory: string
-  ingredients: string[]
+  ingredients: { name: string; quantity: string; unit: string }[] // Sửa ở đây
   instructions: string[]
 }
 
@@ -64,7 +64,7 @@ export default function CreateRecipePage() {
     difficulty: "",
     parentCategory: "",
     subCategory: "",
-    ingredients: [],
+    ingredients: [], // Sửa ở đây
     instructions: [],
   })
 
@@ -123,10 +123,11 @@ export default function CreateRecipePage() {
     setDragActive(false)
   }
 
-  const addIngredientFromSelect = (ingredientText: string) => {
+  // Sửa hàm addIngredientFromSelect để nhận object thay vì string
+  const addIngredientFromSelect = (ingredient: { name: string; quantity: string; unit: string }) => {
     setRecipe((prev) => ({
       ...prev,
-      ingredients: [...prev.ingredients, ingredientText],
+      ingredients: [...prev.ingredients, ingredient],
     }))
   }
 
@@ -173,6 +174,7 @@ export default function CreateRecipePage() {
     setDetailedInstructions(renumbered)
   }
 
+  // Sửa phần validateForm
   const validateForm = () => {
     const newErrors: Record<string, string> = {}
 
@@ -184,7 +186,9 @@ export default function CreateRecipePage() {
     if (!recipe.subCategory) newErrors.subCategory = "Danh mục con là bắt buộc"
     if (!imageFile) newErrors.img = "Hình ảnh là bắt buộc"
 
-    const validIngredients = recipe.ingredients.filter((ing) => ing.trim())
+    const validIngredients = recipe.ingredients.filter(
+      (ing) => ing.name && ing.quantity && ing.unit
+    )
     if (validIngredients.length === 0) newErrors.ingredients = "Ít nhất một nguyên liệu là bắt buộc"
 
     if (detailedInstructions.length === 0 || !detailedInstructions.some((inst) => inst.description.trim())) {
@@ -226,53 +230,37 @@ export default function CreateRecipePage() {
       }
 
       // Step 2: Create ALL Recipe Ingredients (nhiều ingredients)
-      const validIngredients = recipe.ingredients.filter(ing => ing.trim())
+      const validIngredients = recipe.ingredients.filter(
+        (ing) => ing.name && ing.quantity && ing.unit
+      )
       const ingredientResults = []
-      
-      for (const ingredientText of validIngredients) {
-        try {
-          const parts = ingredientText.trim().split(' ')
-          let quantity = 1
-          let ingredientId = ''
 
-          if (parts.length >= 3) {
-            const quantityMatch = parts[0].match(/[\d.,]+/)
-            if (quantityMatch) {
-              quantity = parseFloat(quantityMatch[0])
-            }
-            
-            const ingredientName = parts.slice(2).join(' ')
-            const foundIngredient = ingredients.find(ing => 
-              ing.ingredientName.toLowerCase() === ingredientName.toLowerCase()
-            )
-            
-            if (foundIngredient) {
-              ingredientId = foundIngredient.id
-            } else {
-              console.warn(`Ingredient not found: ${ingredientName}`)
-              continue // Skip this ingredient
-            }
-          } else {
-            continue // Skip invalid format
+      for (const ingredient of validIngredients) {
+        try {
+          const foundIngredient = ingredients.find(
+            (ingr) =>
+              ingr.ingredientName.trim().toLowerCase() === ingredient.name.trim().toLowerCase()
+          )
+          if (!foundIngredient) {
+            console.warn("Ingredient not found:", ingredient.name)
+            continue
           }
 
           const ingredientData: RecipeIngredientsCreationRequest = {
             recipeId: recipeId,
-            ingredientId: ingredientId,
-            quantity: quantity
+            ingredientId: foundIngredient.id,
+            quantity: parseFloat(ingredient.quantity),
+            // Nếu backend cần đơn vị, thêm unit: ingredient.unit
           }
 
           const result = await createRecipeIngredient(ingredientData)
           ingredientResults.push(result)
-          
         } catch (error) {
-          console.error(`Error creating ingredient: ${ingredientText}`, error)
-          // Continue with other ingredients even if one fails
+          console.error("Error creating ingredient:", ingredient, error)
         }
       }
 
       // Step 3: Create ALL Recipe Steps (nhiều steps)
-// Step 3: Create ALL Recipe Steps (nhiều steps)
         const validInstructions = detailedInstructions.filter(inst => inst.description.trim())
         const stepResults = []
 
@@ -308,7 +296,7 @@ export default function CreateRecipePage() {
       // `
 
       // alert(successMessage)
-      router.push("/recipes")
+      router.push('/recipes')
 
     } catch (error) {
       console.error('Error creating recipe:', error)
@@ -640,65 +628,39 @@ export default function CreateRecipePage() {
 
                       {/* Ingredient List */}
                       <div className="space-y-2">
-                        {recipe.ingredients.map((ingredient, index) => {
-                          const parts = ingredient.trim().split(' ')
-                          let quantity = ''
-                          let unit = ''
-                          let name = ''
-                          
-                          if (parts.length >= 3) {
-                            const quantityMatch = parts[0].match(/[\d.,]+/)
-                            if (quantityMatch) {
-                              quantity = quantityMatch[0]
-                              const remainingUnit = parts[0].replace(quantityMatch[0], '')
-                              if (remainingUnit) {
-                                unit = remainingUnit
-                                name = parts.slice(1).join(' ')
-                              } else {
-                                unit = parts[1]
-                                name = parts.slice(2).join(' ')
-                              }
-                            } else {
-                              name = ingredient
-                            }
-                          } else {
-                            name = ingredient
-                          }
-
-                          return (
-                            <div key={index} className="grid grid-cols-12 gap-4 items-center px-4 py-3 border rounded-lg hover:bg-gray-50">
-                              <div className="col-span-1">
-                                <span className="text-sm font-medium text-gray-600">{index + 1}</span>
-                              </div>
-                              <div className="col-span-6">
-                                <div className="p-2 bg-gray-100 rounded border">
-                                  <span className="text-gray-800 font-medium">{name || ingredient}</span>
-                                </div>
-                              </div>
-                              <div className="col-span-2">
-                                <div className="p-2 bg-gray-100 rounded border text-center">
-                                  <span className="text-gray-800 font-medium">{quantity || '-'}</span>
-                                </div>
-                              </div>
-                              <div className="col-span-2">
-                                <div className="p-2 bg-gray-100 rounded border text-center">
-                                  <span className="text-gray-800 font-medium">{unit || '-'}</span>
-                                </div>
-                              </div>
-                              <div className="col-span-1">
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => removeIngredient(index)}
-                                  className="text-red-600 hover:text-red-800 hover:bg-red-50 p-1"
-                                >
-                                  <X className="w-4 h-4" />
-                                </Button>
+                        {recipe.ingredients.map((ingredient, index) => (
+                          <div key={index} className="grid grid-cols-12 gap-4 items-center px-4 py-3 border rounded-lg hover:bg-gray-50">
+                            <div className="col-span-1">
+                              <span className="text-sm font-medium text-gray-600">{index + 1}</span>
+                            </div>
+                            <div className="col-span-6">
+                              <div className="p-2 bg-gray-100 rounded border">
+                                <span className="text-gray-800 font-medium">{ingredient.name || "-"}</span>
                               </div>
                             </div>
-                          )
-                        })}
+                            <div className="col-span-2">
+                              <div className="p-2 bg-gray-100 rounded border text-center">
+                                <span className="text-gray-800 font-medium">{ingredient.quantity || "-"}</span>
+                              </div>
+                            </div>
+                            <div className="col-span-2">
+                              <div className="p-2 bg-gray-100 rounded border text-center">
+                                <span className="text-gray-800 font-medium">{ingredient.unit || "-"}</span>
+                              </div>
+                            </div>
+                            <div className="col-span-1">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeIngredient(index)}
+                                className="text-red-600 hover:text-red-800 hover:bg-red-50 p-1"
+                              >
+                                <X className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </>
                   ) : (

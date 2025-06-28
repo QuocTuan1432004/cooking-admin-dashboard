@@ -168,7 +168,7 @@ class NotificationApi {
       }
   
       const notification: NotificationResponse = JSON.parse(message.body);
-      console.log("📢 Processed WebSocket notification:", notification);
+  
   
       if (!notification.id) {
         console.error("❌ Notification missing required 'id' field");
@@ -180,9 +180,7 @@ class NotificationApi {
       const decodedToken = token ? JSON.parse(atob(token.split('.')[1])) : null;
       const currentUserId = decodedToken?.id;
       const currentRoles: string[] = decodedToken?.scope?.split(" ") || [];
-  
-      console.log("👤 CurrentUserId:", currentUserId);
-      console.log("🔐 CurrentRoles:", currentRoles);
+
   
       const isAdmin = currentRoles.includes("ROLE_ADMIN");
   
@@ -492,5 +490,4 @@ class NotificationApi {
 }
 
 const api = new NotificationApi();
-console.log("Available methods:", Object.getOwnPropertyNames(Object.getPrototypeOf(api)));
 export const notificationApi = api;

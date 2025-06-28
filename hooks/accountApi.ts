@@ -173,7 +173,7 @@ export const useAccountsApi = () => {
   const getRecipeCountByUser = async (accountId: string): Promise<number> => {
     try {
       const response = await authenticatedFetch(
-        `http://localhost:8080/recipe/count/${accountId}`,
+        `http://localhost:8080/recipe/getRecipeByAccountUseForAdmin/${accountId}`,
         { method: 'GET' }
       );
 

@@ -17,7 +17,7 @@ interface SelectedIngredient {
 interface IngredientSelectModalProps {
   isOpen: boolean
   onClose: () => void
-  onSelect: (ingredientText: string) => void
+  onSelect: (ingredient: { name: string; quantity: string; unit: string }) => void // Sửa ở đây
   ingredients: Ingredient[]
 }
 
@@ -64,9 +64,11 @@ export function IngredientSelectModal({ isOpen, onClose, onSelect, ingredients }
     const validIngredients = selectedIngredients.filter((item) => item.quantity.trim())
 
     validIngredients.forEach((item) => {
-      // Sử dụng MeasurementUnit từ ingredient thay vì unit có thể thay đổi
-      const ingredientText = `${item.quantity} ${item.ingredient.measurementUnit} ${item.ingredient.ingredientName}`
-      onSelect(ingredientText)
+      onSelect({
+        name: item.ingredient.ingredientName,
+        quantity: item.quantity,
+        unit: item.ingredient.measurementUnit, // hoặc item.unit nếu muốn cho phép chọn đơn vị khác
+      })
     })
 
     // Reset state

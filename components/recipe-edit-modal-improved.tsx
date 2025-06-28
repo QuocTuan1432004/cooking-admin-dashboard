@@ -152,7 +152,6 @@ export function RecipeEditModalImproved({ recipe, isOpen, onClose, onSave }: Rec
       setIsLoadingAllIngredients(true)
       const ingredientsData = await getAllIngredients()
       setAllIngredients(ingredientsData)
-      console.log("Loaded ingredients:", ingredientsData)
     } catch (error) {
       console.error("Error loading ingredients:", error)
       toast.error("Không thể tải danh sách nguyên liệu")
@@ -402,7 +401,11 @@ export function RecipeEditModalImproved({ recipe, isOpen, onClose, onSave }: Rec
       // Clean up the recipe data and call onSave
       const cleanedRecipe = {
         ...editingRecipe,
-        ingredients: editingRecipe.ingredients?.filter((ing) => ing.trim()) || [],
+        ingredients: Array.isArray(editingRecipe.ingredients)
+          ? editingRecipe.ingredients.filter(
+              (ing) => ing && ing.name && ing.name.trim() && ing.quantity && ing.unit
+            )
+          : [],
         instructions: editingRecipe.instructions?.filter((inst) => inst.trim()) || [],
       }
 
@@ -543,17 +546,12 @@ export function RecipeEditModalImproved({ recipe, isOpen, onClose, onSave }: Rec
     }
   }
 
-  const addIngredientFromSelect = async (ingredientText: string) => {
+  // Thay thế hàm addIngredientFromSelect để nhận object { name, quantity, unit }
+  const addIngredientFromSelect = async (ingredient: { name: string; quantity: string; unit: string }) => {
     try {
-      // Phân tích chuỗi ingredientText thành quantity, unit, và ingredientName
-      const parts = ingredientText.trim().split(" ")
-      const quantity = Number.parseFloat(parts[0]) || 1
-      const unit = parts[1] || ""
-      const ingredientName = parts.slice(2).join(" ")
-
-      // Tìm ingredient trong allIngredients dựa trên ingredientName
+      // Tìm ingredient trong allIngredients dựa trên name
       const selectedIngredient = allIngredients.find(
-        (ing) => ing.ingredientName.toLowerCase() === ingredientName.toLowerCase(),
+        (ing) => ing.ingredientName.toLowerCase() === ingredient.name.trim().toLowerCase(),
       )
 
       if (!selectedIngredient) {
@@ -565,7 +563,8 @@ export function RecipeEditModalImproved({ recipe, isOpen, onClose, onSave }: Rec
       const recipeIngredientData: RecipeIngredientsCreationRequest = {
         recipeId: editingRecipe!.id,
         ingredientId: selectedIngredient.id,
-        quantity: quantity,
+        quantity: parseFloat(ingredient.quantity),
+        // Nếu backend cần đơn vị, thêm unit: ingredient.unit
       }
 
       const newRecipeIngredient = await createRecipeIngredient(recipeIngredientData)
@@ -573,9 +572,12 @@ export function RecipeEditModalImproved({ recipe, isOpen, onClose, onSave }: Rec
       // Cập nhật recipeIngredients
       setRecipeIngredients((prev) => [...prev, newRecipeIngredient])
 
-      // Cập nhật editingRecipe.ingredients
+      // Cập nhật editingRecipe.ingredients (giữ dạng object)
       if (editingRecipe) {
-        const newIngredients = [...(editingRecipe.ingredients || []), ingredientText]
+        const newIngredients = [
+          ...(Array.isArray(editingRecipe.ingredients) ? editingRecipe.ingredients : []),
+          ingredient,
+        ]
         updateEditingRecipe("ingredients", newIngredients)
       }
 

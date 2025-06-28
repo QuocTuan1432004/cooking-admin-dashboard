@@ -67,8 +67,6 @@ export default function RecipesPage() {
           servings: 4,
         })
       );
-
-      console.log("Converted Recipes:", convertedRecipes);
       setRecipes(convertedRecipes);
       setTotalPages(response.result.totalPages);
       setTotalElements(response.result.totalElements);
