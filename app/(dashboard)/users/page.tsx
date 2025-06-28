@@ -32,7 +32,6 @@ export default function UsersPage() {
   const { unreadCount } = useNotification();
   const {
     getAllAccounts,
-    deleteAccount,
     manageAccount,
     getRecipeCountByUser,
     searchAccountsByEmail,
@@ -271,21 +270,6 @@ export default function UsersPage() {
   const handleSearchKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       handleSearch();
-    }
-  };
-
-  const handleDeleteUser = async (userId: string) => {
-    if (confirm("Bạn có chắc muốn xóa người dùng này?")) {
-      try {
-        await deleteAccount(userId);
-        if (isSearchMode) {
-          handleSearch();
-        } else {
-          fetchUsers();
-        }
-      } catch (error) {
-        console.error("Failed to delete user:", error);
-      }
     }
   };
 
@@ -625,19 +609,6 @@ export default function UsersPage() {
                             Kích hoạt
                           </Button>
                         )}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-red-600 border-red-600 hover:bg-red-50"
-                          onClick={() =>
-                            user.id &&
-                            !user.id.startsWith("temp-") &&
-                            handleDeleteUser(user.id)
-                          }
-                          disabled={!user.id || user.id.startsWith("temp-")}
-                        >
-                          Xóa
-                        </Button>
                       </div>
                     </td>
                   </tr>
